@@ -1,4 +1,4 @@
-import { streamText, Output, NoObjectGeneratedError } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 import {
   createLovableAiGatewayProvider,
@@ -7,6 +7,32 @@ import {
   SCAN_MODEL,
   RESPONSE_MODEL,
 } from "./ai-gateway.server";
+
+/** Extracts the first JSON object from a model response (handles ``` fences and prose). */
+function extractJson(raw: string): unknown {
+  const text = raw.replace(/```(?:json)?/gi, "").trim();
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("no json");
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+  }
+  throw new Error("unbalanced json");
+}
 
 export const AnalysisSchema = z.object({
   results: z.array(
