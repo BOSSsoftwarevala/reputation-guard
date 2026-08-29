@@ -1,4 +1,4 @@
-import { streamText, Output, NoObjectGeneratedError } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 import {
   createLovableAiGatewayProvider,
@@ -7,6 +7,32 @@ import {
   SCAN_MODEL,
   RESPONSE_MODEL,
 } from "./ai-gateway.server";
+
+/** Extracts the first JSON object from a model response (handles ``` fences and prose). */
+function extractJson(raw: string): unknown {
+  const text = raw.replace(/```(?:json)?/gi, "").trim();
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("no json");
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+  }
+  throw new Error("unbalanced json");
+}
 
 export const AnalysisSchema = z.object({
   results: z.array(
@@ -98,18 +124,22 @@ export async function analyzeReviews(
   ].join("\n");
 
   try {
-    const result = streamText({
+    const { text } = await generateText({
       model: provider(SCAN_MODEL),
-      system: SYSTEM_PROMPT,
+      system: `${SYSTEM_PROMPT}
+
+Respond with raw JSON only (no markdown fences) shaped exactly as:
+{"results":[{"id":"<review id>","violation_category":"spam|fake_content|off_topic|conflict_of_interest|harassment|abuse|threats|extortion|personal_information|promotional|other|none","confidence":0-100,"priority":"high|medium|review_required|normal","explanation":"...","evidence":["..."],"recommended_action":"...","is_legitimate_negative":true|false}]}`,
       prompt,
-      output: Output.object({ schema: AnalysisSchema }),
     });
-    const output = await result.output;
-    return { results: output.results };
-  } catch (error) {
-    if (NoObjectGeneratedError.isInstance(error)) {
+    try {
+      const parsed = AnalysisSchema.parse(extractJson(text));
+      return { results: parsed.results };
+    } catch (parseError) {
+      console.error("[scan] unparsable analysis", String(parseError).slice(0, 300));
       return { error: "The AI returned an unreadable analysis for this batch.", retryable: true };
     }
+  } catch (error) {
     const described = describeGatewayError(error);
     console.error("[scan] gateway failure", described.message);
     return { error: described.message, retryable: described.retryable };
@@ -130,21 +160,21 @@ export async function draftReviewResponse(input: {
 }): Promise<{ response: string; rationale: string } | { error: string; retryable: boolean }> {
   const provider = createLovableAiGatewayProvider(requireLovableApiKey());
   try {
-    const result = streamText({
+    const { text } = await generateText({
       model: provider(RESPONSE_MODEL),
       system: `You write public owner responses to Google reviews for "${input.businessName}".
 Rules: never dispute facts you cannot verify, never invent details about the customer's visit,
 never promise compensation, never ask the reviewer to delete the review. Stay under 90 words,
-acknowledge the experience, and offer a concrete offline next step. Tone: ${input.tone}.`,
+acknowledge the experience, and offer a concrete offline next step. Tone: ${input.tone}.
+Respond with raw JSON only: {"response":"<the reply>","rationale":"<one sentence on the approach>"}`,
       prompt: `Reviewer: ${input.reviewerName}\nRating: ${input.rating}/5\nReview: ${input.reviewText}`,
-      output: Output.object({ schema: ResponseSchema }),
     });
-    const output = await result.output;
-    return output;
-  } catch (error) {
-    if (NoObjectGeneratedError.isInstance(error)) {
+    try {
+      return ResponseSchema.parse(extractJson(text));
+    } catch {
       return { error: "The AI could not draft a response. Try again.", retryable: true };
     }
+  } catch (error) {
     const described = describeGatewayError(error);
     return { error: described.message, retryable: described.retryable };
   }
