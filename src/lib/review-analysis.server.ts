@@ -124,18 +124,22 @@ export async function analyzeReviews(
   ].join("\n");
 
   try {
-    const result = streamText({
+    const { text } = await generateText({
       model: provider(SCAN_MODEL),
-      system: SYSTEM_PROMPT,
+      system: `${SYSTEM_PROMPT}
+
+Respond with raw JSON only (no markdown fences) shaped exactly as:
+{"results":[{"id":"<review id>","violation_category":"spam|fake_content|off_topic|conflict_of_interest|harassment|abuse|threats|extortion|personal_information|promotional|other|none","confidence":0-100,"priority":"high|medium|review_required|normal","explanation":"...","evidence":["..."],"recommended_action":"...","is_legitimate_negative":true|false}]}`,
       prompt,
-      output: Output.object({ schema: AnalysisSchema }),
     });
-    const output = await result.output;
-    return { results: output.results };
-  } catch (error) {
-    if (NoObjectGeneratedError.isInstance(error)) {
+    try {
+      const parsed = AnalysisSchema.parse(extractJson(text));
+      return { results: parsed.results };
+    } catch (parseError) {
+      console.error("[scan] unparsable analysis", String(parseError).slice(0, 300));
       return { error: "The AI returned an unreadable analysis for this batch.", retryable: true };
     }
+  } catch (error) {
     const described = describeGatewayError(error);
     console.error("[scan] gateway failure", described.message);
     return { error: described.message, retryable: described.retryable };
