@@ -160,21 +160,21 @@ export async function draftReviewResponse(input: {
 }): Promise<{ response: string; rationale: string } | { error: string; retryable: boolean }> {
   const provider = createLovableAiGatewayProvider(requireLovableApiKey());
   try {
-    const result = streamText({
+    const { text } = await generateText({
       model: provider(RESPONSE_MODEL),
       system: `You write public owner responses to Google reviews for "${input.businessName}".
 Rules: never dispute facts you cannot verify, never invent details about the customer's visit,
 never promise compensation, never ask the reviewer to delete the review. Stay under 90 words,
-acknowledge the experience, and offer a concrete offline next step. Tone: ${input.tone}.`,
+acknowledge the experience, and offer a concrete offline next step. Tone: ${input.tone}.
+Respond with raw JSON only: {"response":"<the reply>","rationale":"<one sentence on the approach>"}`,
       prompt: `Reviewer: ${input.reviewerName}\nRating: ${input.rating}/5\nReview: ${input.reviewText}`,
-      output: Output.object({ schema: ResponseSchema }),
     });
-    const output = await result.output;
-    return output;
-  } catch (error) {
-    if (NoObjectGeneratedError.isInstance(error)) {
+    try {
+      return ResponseSchema.parse(extractJson(text));
+    } catch {
       return { error: "The AI could not draft a response. Try again.", retryable: true };
     }
+  } catch (error) {
     const described = describeGatewayError(error);
     return { error: described.message, retryable: described.retryable };
   }
