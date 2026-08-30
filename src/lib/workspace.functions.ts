@@ -130,3 +130,70 @@ export const markNotificationsRead = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/** Updates the caller's own profile. */
+export const updateProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ full_name: z.string().max(120).nullable().optional() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .update({ full_name: data.full_name ?? null })
+      .eq("id", userId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return profile;
+  });
+
+/** Updates a business the caller owns. */
+export const updateBusiness = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        name: z.string().min(1).max(120),
+        industry: z.string().max(80).nullable().optional(),
+        website: z.string().max(200).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: business, error } = await context.supabase
+      .from("businesses")
+      .update({
+        name: data.name,
+        industry: data.industry ?? null,
+        website: data.website ?? null,
+      })
+      .eq("id", data.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return business;
+  });
+
+/** Lists teammates on a business, with their profile details. */
+export const listTeam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ businessId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: members, error } = await supabase
+      .from("business_members")
+      .select("*")
+      .eq("business_id", data.businessId);
+    if (error) throw new Error(error.message);
+    const ids = (members ?? []).map((member) => member.user_id);
+    const { data: profiles } = ids.length
+      ? await supabase.from("profiles").select("id,email,full_name").in("id", ids)
+      : { data: [] as { id: string; email: string | null; full_name: string | null }[] };
+    return (members ?? []).map((member) => ({
+      ...member,
+      profile: (profiles ?? []).find((profile) => profile.id === member.user_id) ?? null,
+    }));
+  });
