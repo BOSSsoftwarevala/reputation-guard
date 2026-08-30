@@ -4,6 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { importReviews, listReviews } from "@/lib/reviews.functions";
+import { createCasesBulk } from "@/lib/cases.functions";
+import { toast } from "sonner";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
 import { EmptyState, ErrorBlock, PageHeader, Panel, SkeletonRows } from "@/components/ui-kit";
@@ -44,6 +46,9 @@ function ReviewsPage() {
   const [sortBy, setSortBy] = useState<"review_date" | "rating" | "ai_confidence">("review_date");
   const [selected, setSelected] = useState<ReviewWithRelations | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const bulkCases = useServerFn(createCasesBulk);
+  const queryClient = useQueryClient();
 
   const filters = {
     businessId,
@@ -67,6 +72,24 @@ function ReviewsPage() {
   const rows = (data?.rows ?? []) as ReviewWithRelations[];
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / 25));
+
+  const selectedIds = Object.keys(checked).filter((id) => checked[id]);
+
+  const bulkMutation = useMutation({
+    mutationFn: () => bulkCases({ data: { reviewIds: selectedIds } }),
+    onSuccess: (result) => {
+      toast.success(
+        `${result.created} case${result.created === 1 ? "" : "s"} opened` +
+          (result.skipped ? ` · ${result.skipped} already had a case` : ""),
+      );
+      setChecked({});
+      void queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      void queryClient.invalidateQueries({ queryKey: ["cases"] });
+    },
+    onError: (caught: Error) => toast.error(caught.message),
+  });
+
+  const allChecked = rows.length > 0 && rows.every((row) => checked[row.id]);
 
   const selectClass =
     "rounded-xl border border-input bg-surface px-3 py-2 text-sm outline-none focus:neon-outline";
@@ -129,6 +152,28 @@ function ReviewsPage() {
         </select>
       </Panel>
 
+      {selectedIds.length > 0 ? (
+        <Panel className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4 neon-outline">
+          <span className="text-sm font-medium">{selectedIds.length} review(s) selected</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setChecked({})}
+              className="rounded-xl border border-border px-3 py-2 text-sm"
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => bulkMutation.mutate()}
+              disabled={bulkMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet to-magenta px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {bulkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Open removal cases
+            </button>
+          </div>
+        </Panel>
+      ) : null}
+
       <Panel className="overflow-hidden">
         {isLoading ? (
           <SkeletonRows />
@@ -145,6 +190,20 @@ function ReviewsPage() {
             <table className="w-full min-w-[880px] text-left text-sm">
               <thead className="border-b border-border/60 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
+                  <th className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all reviews on this page"
+                      checked={allChecked}
+                      onChange={(event) =>
+                        setChecked(
+                          event.target.checked
+                            ? Object.fromEntries(rows.map((row) => [row.id, true]))
+                            : {},
+                        )
+                      }
+                    />
+                  </th>
                   <th className="px-4 py-3">Reviewer</th>
                   <th className="px-4 py-3">Rating</th>
                   <th className="px-4 py-3">Review</th>
@@ -161,6 +220,16 @@ function ReviewsPage() {
                     onClick={() => setSelected(row)}
                     className="cursor-pointer border-b border-border/40 transition-colors last:border-0 hover:bg-accent/40"
                   >
+                    <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select review by ${row.reviewer_name}`}
+                        checked={Boolean(checked[row.id])}
+                        onChange={(event) =>
+                          setChecked((current) => ({ ...current, [row.id]: event.target.checked }))
+                        }
+                      />
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3 font-medium">
                       {row.reviewer_name}
                       {row.removal_cases?.length ? (

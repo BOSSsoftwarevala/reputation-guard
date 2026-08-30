@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Download, Search } from "lucide-react";
+import { Download, Printer, Search } from "lucide-react";
 import { listCases, getCase, updateCase, addCaseNote } from "@/lib/cases.functions";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
@@ -267,6 +267,26 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
     ].join("\n");
   }, [record, review, business, location, data?.events]);
 
+  const printPackage = () => {
+    const win = window.open("", "_blank", "width=900,height=1000");
+    if (!win) {
+      toast.error("Allow pop-ups to print the evidence package.");
+      return;
+    }
+    const escaped = evidencePackage.replace(/[&<>]/g, (char) =>
+      char === "&" ? "&amp;" : char === "<" ? "&lt;" : "&gt;",
+    );
+    win.document.write(
+      `<!doctype html><html><head><title>Case ${String(record?.["case_number"] ?? "")} evidence package</title>` +
+        `<style>body{font-family:ui-sans-serif,system-ui,sans-serif;padding:40px;color:#111}` +
+        `h1{font-size:18px;letter-spacing:.04em}pre{white-space:pre-wrap;font-size:12px;line-height:1.6}</style>` +
+        `</head><body><h1>OrbitRep — Evidence Package</h1><pre>${escaped}</pre></body></html>`,
+    );
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   const download = () => {
     const blob = new Blob([evidencePackage], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -275,6 +295,7 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
     link.download = `case-${String(record?.["case_number"] ?? "export")}-evidence.txt`;
     link.click();
     URL.revokeObjectURL(url);
+    toast.success("Evidence package downloaded");
   };
 
   return (
@@ -338,12 +359,20 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
             <pre className="mt-2 max-h-64 overflow-auto rounded-xl border border-border/60 bg-surface-2 p-3 text-[11px] leading-relaxed text-muted-foreground">
               {evidencePackage}
             </pre>
+            <div className="mt-3 flex flex-wrap gap-2">
             <button
               onClick={download}
               className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet to-neon px-4 py-2 text-sm font-semibold text-primary-foreground"
             >
               <Download className="h-4 w-4" /> Export case summary
             </button>
+            <button
+              onClick={printPackage}
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium"
+            >
+              <Printer className="h-4 w-4" /> Print / PDF
+            </button>
+            </div>
 
             <h3 className="mt-6 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Case history
