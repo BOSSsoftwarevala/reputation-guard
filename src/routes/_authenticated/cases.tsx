@@ -60,6 +60,7 @@ function CasesPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["cases", businessId, status, search],
     queryFn: () => fetchCases({ data: { businessId, status, search: search || undefined } }),
+    enabled: Boolean(businessId),
   });
 
   const rows = useMemo(() => (data ?? []) as CaseListRow[], [data]);

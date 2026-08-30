@@ -50,10 +50,12 @@ function ReportsPage() {
   const statsQuery = useQuery({
     queryKey: ["stats", businessId],
     queryFn: () => fetchStats({ data: { businessId } }),
+    enabled: Boolean(businessId),
   });
   const casesQuery = useQuery({
     queryKey: ["cases", businessId, "all", ""],
     queryFn: () => fetchCases({ data: { businessId, status: "all" } }),
+    enabled: Boolean(businessId),
   });
 
   const report = useMemo(() => {

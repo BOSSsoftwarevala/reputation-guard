@@ -45,6 +45,7 @@ function AnalyticsPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["stats", businessId],
     queryFn: () => fetchStats({ data: { businessId } }),
+    enabled: Boolean(businessId),
   });
 
   const model = useMemo(() => {

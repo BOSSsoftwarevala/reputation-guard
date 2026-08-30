@@ -49,6 +49,7 @@ function ScannerPage() {
   const { data: job, refetch } = useQuery({
     queryKey: ["scan-job", businessId],
     queryFn: () => getJob({ data: { businessId } }),
+    enabled: Boolean(businessId),
     refetchInterval: 4000,
   });
 
