@@ -67,6 +67,7 @@ function ReviewsPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["reviews", filters],
     queryFn: () => fetchReviews({ data: filters }),
+    enabled: Boolean(businessId),
   });
 
   const rows = (data?.rows ?? []) as ReviewWithRelations[];
