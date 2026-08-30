@@ -195,3 +195,67 @@ export const addCaseNote = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/** Opens removal cases for many flagged reviews at once (bulk triage). */
+export const createCasesBulk = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ reviewIds: z.array(z.string().uuid()).min(1).max(200) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: reviews, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .in("id", data.reviewIds);
+    if (error) throw new Error(error.message);
+
+    const { data: existing } = await supabase
+      .from("removal_cases")
+      .select("review_id")
+      .in("review_id", data.reviewIds);
+    const already = new Set((existing ?? []).map((row) => row.review_id));
+
+    const pending = (reviews ?? []).filter((review) => !already.has(review.id));
+    if (pending.length === 0) return { created: 0, skipped: data.reviewIds.length };
+
+    const { data: created, error: insertError } = await supabase
+      .from("removal_cases")
+      .insert(
+        pending.map((review) => ({
+          business_id: review.business_id,
+          review_id: review.id,
+          location_id: review.location_id,
+          violation_category: review.violation_category ?? "other",
+          evidence: Array.isArray(review.ai_evidence) ? review.ai_evidence : [],
+          created_by: userId,
+          assigned_to: userId,
+          status: "new" as const,
+        })),
+      )
+      .select();
+    if (insertError) throw new Error(insertError.message);
+
+    await supabase.from("case_events").insert(
+      (created ?? []).map((row) => ({
+        case_id: row.id,
+        business_id: row.business_id,
+        actor_id: userId,
+        event_type: "created",
+        message: "Removal case opened from bulk triage.",
+      })),
+    );
+
+    const businessId = created?.[0]?.business_id;
+    if (businessId) {
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        business_id: businessId,
+        type: "case_created",
+        title: `${created!.length} removal cases opened`,
+        body: "Bulk triage created cases from flagged reviews.",
+        link: "/cases",
+      });
+    }
+    return { created: created?.length ?? 0, skipped: data.reviewIds.length - pending.length };
+  });
