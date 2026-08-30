@@ -124,6 +124,62 @@ export type Database = {
           },
         ]
       }
+      google_connections: {
+        Row: {
+          access_token: string | null
+          business_id: string
+          connected_by: string
+          created_at: string
+          google_account_name: string | null
+          google_email: string | null
+          id: string
+          last_sync_at: string | null
+          last_sync_error: string | null
+          refresh_token: string | null
+          scope: string | null
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          business_id: string
+          connected_by: string
+          created_at?: string
+          google_account_name?: string | null
+          google_email?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          refresh_token?: string | null
+          scope?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          business_id?: string
+          connected_by?: string
+          created_at?: string
+          google_account_name?: string | null
+          google_email?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          refresh_token?: string | null
+          scope?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_connections_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           address: string | null
@@ -131,7 +187,9 @@ export type Database = {
           city: string | null
           country: string | null
           created_at: string
+          google_last_sync_at: string | null
           google_place_id: string | null
+          google_resource_name: string | null
           id: string
           name: string
           updated_at: string
@@ -142,7 +200,9 @@ export type Database = {
           city?: string | null
           country?: string | null
           created_at?: string
+          google_last_sync_at?: string | null
           google_place_id?: string | null
+          google_resource_name?: string | null
           id?: string
           name: string
           updated_at?: string
@@ -153,7 +213,9 @@ export type Database = {
           city?: string | null
           country?: string | null
           created_at?: string
+          google_last_sync_at?: string | null
           google_place_id?: string | null
+          google_resource_name?: string | null
           id?: string
           name?: string
           updated_at?: string
@@ -248,9 +310,12 @@ export type Database = {
           created_at: string
           created_by: string
           evidence: Json
+          google_removed_at: string | null
           id: string
           location_id: string | null
           notes: string | null
+          outcome: Database["public"]["Enums"]["removal_outcome"]
+          outcome_checked_at: string | null
           reported_at: string | null
           resolved_at: string | null
           review_id: string
@@ -266,9 +331,12 @@ export type Database = {
           created_at?: string
           created_by: string
           evidence?: Json
+          google_removed_at?: string | null
           id?: string
           location_id?: string | null
           notes?: string | null
+          outcome?: Database["public"]["Enums"]["removal_outcome"]
+          outcome_checked_at?: string | null
           reported_at?: string | null
           resolved_at?: string | null
           review_id: string
@@ -284,9 +352,12 @@ export type Database = {
           created_at?: string
           created_by?: string
           evidence?: Json
+          google_removed_at?: string | null
           id?: string
           location_id?: string | null
           notes?: string | null
+          outcome?: Database["public"]["Enums"]["removal_outcome"]
+          outcome_checked_at?: string | null
           reported_at?: string | null
           resolved_at?: string | null
           review_id?: string
@@ -325,12 +396,16 @@ export type Database = {
           ai_explanation: string | null
           business_id: string
           created_at: string
+          google_last_seen_at: string | null
+          google_review_name: string | null
           id: string
           is_legitimate_negative: boolean
+          is_live_on_google: boolean
           location_id: string | null
           priority: Database["public"]["Enums"]["review_priority"]
           rating: number
           recommended_action: string | null
+          removed_from_google_at: string | null
           review_date: string
           review_text: string
           reviewer_name: string
@@ -349,12 +424,16 @@ export type Database = {
           ai_explanation?: string | null
           business_id: string
           created_at?: string
+          google_last_seen_at?: string | null
+          google_review_name?: string | null
           id?: string
           is_legitimate_negative?: boolean
+          is_live_on_google?: boolean
           location_id?: string | null
           priority?: Database["public"]["Enums"]["review_priority"]
           rating?: number
           recommended_action?: string | null
+          removed_from_google_at?: string | null
           review_date?: string
           review_text?: string
           reviewer_name?: string
@@ -373,12 +452,16 @@ export type Database = {
           ai_explanation?: string | null
           business_id?: string
           created_at?: string
+          google_last_seen_at?: string | null
+          google_review_name?: string | null
           id?: string
           is_legitimate_negative?: boolean
+          is_live_on_google?: boolean
           location_id?: string | null
           priority?: Database["public"]["Enums"]["review_priority"]
           rating?: number
           recommended_action?: string | null
+          removed_from_google_at?: string | null
           review_date?: string
           review_text?: string
           reviewer_name?: string
@@ -504,6 +587,11 @@ export type Database = {
         | "resolved"
         | "rejected"
       job_status: "running" | "paused" | "completed" | "failed"
+      removal_outcome:
+        | "pending"
+        | "removed_by_google"
+        | "still_live"
+        | "no_result"
       review_priority: "high" | "medium" | "review_required" | "normal"
       scan_status: "unscanned" | "queued" | "scanning" | "scanned" | "failed"
       violation_category:
@@ -657,6 +745,12 @@ export const Constants = {
         "rejected",
       ],
       job_status: ["running", "paused", "completed", "failed"],
+      removal_outcome: [
+        "pending",
+        "removed_by_google",
+        "still_live",
+        "no_result",
+      ],
       review_priority: ["high", "medium", "review_required", "normal"],
       scan_status: ["unscanned", "queued", "scanning", "scanned", "failed"],
       violation_category: [
