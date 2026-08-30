@@ -34,7 +34,7 @@ export const Route = createFileRoute("/_authenticated/reviews")({
 
 function ReviewsPage() {
   const { activeBusiness, locations } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const fetchReviews = useServerFn(listReviews);
 
   const [page, setPage] = useState(1);
@@ -67,6 +67,7 @@ function ReviewsPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["reviews", filters],
     queryFn: () => fetchReviews({ data: filters }),
+    enabled: Boolean(businessId),
   });
 
   const rows = (data?.rows ?? []) as ReviewWithRelations[];

@@ -39,12 +39,13 @@ export const Route = createFileRoute("/_authenticated/analytics")({
 
 function AnalyticsPage() {
   const { activeBusiness } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const fetchStats = useServerFn(getBusinessStats);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["stats", businessId],
     queryFn: () => fetchStats({ data: { businessId } }),
+    enabled: Boolean(businessId),
   });
 
   const model = useMemo(() => {
@@ -129,7 +130,7 @@ function AnalyticsPage() {
       <PageHeader
         icon="analytics"
         title="Reputation analytics"
-        subtitle={`Portfolio-wide signal for ${activeBusiness!.name}: sentiment, violation mix and removal outcomes.`}
+        subtitle={`Portfolio-wide signal for ${(activeBusiness?.name ?? "your workspace")}: sentiment, violation mix and removal outcomes.`}
       />
 
       {model.total === 0 ? (

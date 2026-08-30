@@ -31,11 +31,12 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function DashboardPage() {
   const { activeBusiness } = useWorkspace();
   const fetchStats = useServerFn(getBusinessStats);
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["stats", businessId],
     queryFn: () => fetchStats({ data: { businessId } }),
+    enabled: Boolean(businessId),
   });
 
   const derived = useMemo(() => {
@@ -97,7 +98,7 @@ function DashboardPage() {
       <PageHeader
         icon="dashboard"
         title="Command center"
-        subtitle={`Reputation intelligence for ${activeBusiness!.name}.`}
+        subtitle={`Reputation intelligence for ${(activeBusiness?.name ?? "your workspace")}.`}
         actions={
           <>
             <Link

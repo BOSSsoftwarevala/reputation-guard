@@ -42,7 +42,7 @@ const RANGES = [
 
 function ReportsPage() {
   const { activeBusiness } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const fetchStats = useServerFn(getBusinessStats);
   const fetchCases = useServerFn(listCases);
   const [range, setRange] = useState<string>("90");
@@ -50,10 +50,12 @@ function ReportsPage() {
   const statsQuery = useQuery({
     queryKey: ["stats", businessId],
     queryFn: () => fetchStats({ data: { businessId } }),
+    enabled: Boolean(businessId),
   });
   const casesQuery = useQuery({
     queryKey: ["cases", businessId, "all", ""],
     queryFn: () => fetchCases({ data: { businessId, status: "all" } }),
+    enabled: Boolean(businessId),
   });
 
   const report = useMemo(() => {
@@ -99,7 +101,7 @@ function ReportsPage() {
   const text = useMemo(
     () =>
       [
-        `REPUTATION REPORT — ${activeBusiness!.name}`,
+        `REPUTATION REPORT — ${(activeBusiness?.name ?? "your workspace")}`,
         `Period: ${report.rangeLabel}`,
         `Generated: ${new Date().toLocaleString()}`,
         "",
@@ -136,7 +138,7 @@ function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${activeBusiness!.name.toLowerCase().replace(/\s+/g, "-")}-reputation-report.txt`;
+    link.download = `${(activeBusiness?.name ?? "your workspace").toLowerCase().replace(/\s+/g, "-")}-reputation-report.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };

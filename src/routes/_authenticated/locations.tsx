@@ -47,7 +47,7 @@ const emptyDraft: Draft = { id: null, name: "", address: "", city: "", country: 
 
 function LocationsPage() {
   const { activeBusiness, locations, refresh } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const queryClient = useQueryClient();
   const save = useServerFn(upsertLocation);
   const remove = useServerFn(deleteLocation);
@@ -57,6 +57,7 @@ function LocationsPage() {
   const { data: stats } = useQuery({
     queryKey: ["stats", businessId],
     queryFn: () => fetchStats({ data: { businessId } }),
+    enabled: Boolean(businessId),
   });
 
   const perLocation = useMemo(() => {
@@ -112,7 +113,7 @@ function LocationsPage() {
       <PageHeader
         icon="locations"
         title="Locations"
-        subtitle={`Every storefront under ${activeBusiness!.name}. Reviews and cases are attributed per location.`}
+        subtitle={`Every storefront under ${(activeBusiness?.name ?? "your workspace")}. Reviews and cases are attributed per location.`}
         actions={
           <button
             onClick={() => setDraft(emptyDraft)}

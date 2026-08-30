@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/scanner")({
 
 function ScannerPage() {
   const { activeBusiness } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const queryClient = useQueryClient();
   const getJob = useServerFn(getActiveScanJob);
   const start = useServerFn(startScanJob);
@@ -49,6 +49,7 @@ function ScannerPage() {
   const { data: job, refetch } = useQuery({
     queryKey: ["scan-job", businessId],
     queryFn: () => getJob({ data: { businessId } }),
+    enabled: Boolean(businessId),
     refetchInterval: 4000,
   });
 

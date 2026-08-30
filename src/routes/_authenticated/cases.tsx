@@ -51,7 +51,7 @@ type CaseListRow = Awaited<ReturnType<typeof listCases>>[number];
 
 function CasesPage() {
   const { activeBusiness } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const fetchCases = useServerFn(listCases);
   const [status, setStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -60,6 +60,7 @@ function CasesPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["cases", businessId, status, search],
     queryFn: () => fetchCases({ data: { businessId, status, search: search || undefined } }),
+    enabled: Boolean(businessId),
   });
 
   const rows = useMemo(() => (data ?? []) as CaseListRow[], [data]);
