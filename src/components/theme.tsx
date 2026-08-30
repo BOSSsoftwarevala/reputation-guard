@@ -3,10 +3,19 @@ import { Moon, Sun } from "lucide-react";
 
 type Theme = "dark" | "light";
 
-const ThemeContext = createContext<{ theme: Theme; toggle: () => void }>({
+const ThemeContext = createContext<{
+  theme: Theme;
+  toggle: () => void;
+  setTheme: (theme: Theme) => void;
+}>({
   theme: "dark",
   toggle: () => {},
+  setTheme: () => {},
 });
+
+export function useTheme() {
+  return useContext(ThemeContext);
+}
 
 export const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('orbital-theme')||'dark';document.documentElement.classList.toggle('dark',t==='dark');}catch(e){document.documentElement.classList.add('dark');}})();`;
 
@@ -28,7 +37,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>;
+  const apply = useCallback((next: Theme) => {
+    localStorage.setItem("orbital-theme", next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+    setTheme(next);
+  }, []);
+
+  return <ThemeContext.Provider value={{ theme, toggle, setTheme: apply }}>{children}</ThemeContext.Provider>;
 }
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
