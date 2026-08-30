@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/scanner")({
 
 function ScannerPage() {
   const { activeBusiness } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const queryClient = useQueryClient();
   const getJob = useServerFn(getActiveScanJob);
   const start = useServerFn(startScanJob);

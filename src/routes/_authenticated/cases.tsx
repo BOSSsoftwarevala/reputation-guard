@@ -51,7 +51,7 @@ type CaseListRow = Awaited<ReturnType<typeof listCases>>[number];
 
 function CasesPage() {
   const { activeBusiness } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const fetchCases = useServerFn(listCases);
   const [status, setStatus] = useState<string>("all");
   const [search, setSearch] = useState("");

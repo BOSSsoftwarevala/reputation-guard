@@ -34,7 +34,7 @@ export const Route = createFileRoute("/_authenticated/reviews")({
 
 function ReviewsPage() {
   const { activeBusiness, locations } = useWorkspace();
-  const businessId = activeBusiness!.id;
+  const businessId = activeBusiness?.id ?? "";
   const fetchReviews = useServerFn(listReviews);
 
   const [page, setPage] = useState(1);
