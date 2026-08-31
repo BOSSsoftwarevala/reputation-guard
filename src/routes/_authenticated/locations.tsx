@@ -8,6 +8,8 @@ import { deleteLocation, upsertLocation } from "@/lib/workspace.functions";
 import { getBusinessStats } from "@/lib/reviews.functions";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
+import { GooglePanel } from "@/components/google-panel";
+
 import { EmptyState, KpiCard, PageHeader, Panel } from "@/components/ui-kit";
 import type { LocationRow } from "@/lib/domain";
 
@@ -129,6 +131,17 @@ function LocationsPage() {
         <KpiCard label="Reviews mapped" value={stats?.reviews.length ?? 0} tone="neon" icon="reviews" />
         <KpiCard label="Open cases" value={stats?.cases.length ?? 0} tone="magenta" icon="cases" />
       </div>
+
+      <GooglePanel
+        businessId={businessId}
+        locations={locations}
+        onChanged={() => {
+          refresh();
+          void queryClient.invalidateQueries({ queryKey: ["workspace"] });
+          void queryClient.invalidateQueries({ queryKey: ["stats", businessId] });
+        }}
+      />
+
 
       {draft ? (
         <Panel className="mt-6 p-5">

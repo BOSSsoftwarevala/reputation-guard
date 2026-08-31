@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Download, Printer, Search } from "lucide-react";
 import { listCases, getCase, updateCase, addCaseNote } from "@/lib/cases.functions";
+import { checkRemovalOutcomes } from "@/lib/google.functions";
+
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
 import {
@@ -76,14 +78,16 @@ function CasesPage() {
         icon="cases"
         title="Removal cases"
         subtitle="Every case follows Google's official reporting and appeal workflow. Removal decisions are made by Google — never guaranteed."
+        actions={<OutcomeCheckButton businessId={businessId} onDone={() => void refetch()} />}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Open cases" value={rows.filter((r) => !["resolved", "rejected"].includes(r.status)).length} icon="cases" />
-        <KpiCard label="Reported" value={counts["reported"] ?? 0} tone="magenta" icon="reports" />
-        <KpiCard label="Resolved" value={counts["resolved"] ?? 0} tone="success" icon="analytics" />
+        <KpiCard label="Removed by Google" value={rows.filter((r) => r.outcome === "removed_by_google").length} tone="success" icon="analytics" />
+        <KpiCard label="Still live" value={rows.filter((r) => r.outcome === "still_live").length} tone="magenta" icon="reports" />
         <KpiCard label="Rejected" value={counts["rejected"] ?? 0} tone="danger" icon="alerts" />
       </div>
+
 
       <Panel className="mt-6 overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-border/60 p-4">
@@ -131,10 +135,12 @@ function CasesPage() {
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Location</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Outcome</th>
                   <th className="px-4 py-3">Created</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
+
               <tbody>
                 {rows.map((row) => {
                   const review = row.reviews as {
@@ -160,6 +166,10 @@ function CasesPage() {
                       <td className="px-4 py-3">
                         <CaseStatusBadge status={row.status as CaseStatus} />
                       </td>
+                      <td className="px-4 py-3">
+                        <OutcomeBadge outcome={row.outcome as string} />
+                      </td>
+
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {new Date(row.created_at).toLocaleDateString()}
                       </td>
@@ -410,5 +420,53 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
         ) : null}
       </aside>
     </div>
+  );
+}
+
+const OUTCOME_STYLES: Record<string, string> = {
+  pending: "bg-muted text-muted-foreground ring-border",
+  removed_by_google: "bg-success/14 text-success ring-success/40",
+  still_live: "bg-warning/12 text-warning ring-warning/40",
+  no_result: "bg-danger/12 text-danger ring-danger/40",
+};
+
+const OUTCOME_LABELS: Record<string, string> = {
+  pending: "Awaiting Google",
+  removed_by_google: "Removed by Google",
+  still_live: "Still live",
+  no_result: "No result",
+};
+
+function OutcomeBadge({ outcome }: { outcome: string }) {
+  const key = OUTCOME_LABELS[outcome] ? outcome : "pending";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${OUTCOME_STYLES[key]}`}
+    >
+      {OUTCOME_LABELS[key]}
+    </span>
+  );
+}
+
+function OutcomeCheckButton({ businessId, onDone }: { businessId: string; onDone: () => void }) {
+  const check = useServerFn(checkRemovalOutcomes);
+  const mutation = useMutation({
+    mutationFn: () => check({ data: { businessId } }),
+    onSuccess: (result) => {
+      toast.success(
+        `Outcome check complete — ${result.resolved} removed by Google, ${result.stillLive} still live.`,
+      );
+      onDone();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  return (
+    <button
+      disabled={!businessId || mutation.isPending}
+      onClick={() => mutation.mutate()}
+      className="glass inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold hover:neon-outline disabled:opacity-40"
+    >
+      {mutation.isPending ? "Checking Google…" : "Check removal outcomes"}
+    </button>
   );
 }
