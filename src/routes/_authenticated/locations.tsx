@@ -8,6 +8,8 @@ import { deleteLocation, upsertLocation } from "@/lib/workspace.functions";
 import { getBusinessStats } from "@/lib/reviews.functions";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
+import { GooglePanel } from "@/components/google-panel";
+
 import { EmptyState, KpiCard, PageHeader, Panel } from "@/components/ui-kit";
 import type { LocationRow } from "@/lib/domain";
 
