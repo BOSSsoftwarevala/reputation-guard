@@ -133,10 +133,12 @@ function CasesPage() {
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Location</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Outcome</th>
                   <th className="px-4 py-3">Created</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
+
               <tbody>
                 {rows.map((row) => {
                   const review = row.reviews as {
