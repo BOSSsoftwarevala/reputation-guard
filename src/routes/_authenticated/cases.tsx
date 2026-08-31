@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Download, Printer, Search } from "lucide-react";
 import { listCases, getCase, updateCase, addCaseNote } from "@/lib/cases.functions";
+import { checkRemovalOutcomes } from "@/lib/google.functions";
+
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
 import {
