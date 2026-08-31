@@ -164,6 +164,10 @@ function CasesPage() {
                       <td className="px-4 py-3">
                         <CaseStatusBadge status={row.status as CaseStatus} />
                       </td>
+                      <td className="px-4 py-3">
+                        <OutcomeBadge outcome={row.outcome as string} />
+                      </td>
+
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {new Date(row.created_at).toLocaleDateString()}
                       </td>
