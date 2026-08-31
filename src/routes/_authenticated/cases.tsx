@@ -76,14 +76,16 @@ function CasesPage() {
         icon="cases"
         title="Removal cases"
         subtitle="Every case follows Google's official reporting and appeal workflow. Removal decisions are made by Google — never guaranteed."
+        actions={<OutcomeCheckButton businessId={businessId} onDone={() => void refetch()} />}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Open cases" value={rows.filter((r) => !["resolved", "rejected"].includes(r.status)).length} icon="cases" />
-        <KpiCard label="Reported" value={counts["reported"] ?? 0} tone="magenta" icon="reports" />
-        <KpiCard label="Resolved" value={counts["resolved"] ?? 0} tone="success" icon="analytics" />
+        <KpiCard label="Removed by Google" value={rows.filter((r) => r.outcome === "removed_by_google").length} tone="success" icon="analytics" />
+        <KpiCard label="Still live" value={rows.filter((r) => r.outcome === "still_live").length} tone="magenta" icon="reports" />
         <KpiCard label="Rejected" value={counts["rejected"] ?? 0} tone="danger" icon="alerts" />
       </div>
+
 
       <Panel className="mt-6 overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-border/60 p-4">
