@@ -132,6 +132,17 @@ function LocationsPage() {
         <KpiCard label="Open cases" value={stats?.cases.length ?? 0} tone="magenta" icon="cases" />
       </div>
 
+      <GooglePanel
+        businessId={businessId}
+        locations={locations}
+        onChanged={() => {
+          refresh();
+          void queryClient.invalidateQueries({ queryKey: ["workspace"] });
+          void queryClient.invalidateQueries({ queryKey: ["stats", businessId] });
+        }}
+      />
+
+
       {draft ? (
         <Panel className="mt-6 p-5">
           <h2 className="font-display text-lg font-semibold">
