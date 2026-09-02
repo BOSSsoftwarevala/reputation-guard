@@ -57,7 +57,7 @@ export const getBusinessReport = createServerFn({ method: "POST" })
     const since = data.days ? new Date(Date.now() - data.days * 86_400_000).toISOString() : null;
     const { data: report, error } = await context.supabase.rpc("business_report", {
       _business_id: data.businessId,
-      _since: since,
+      _since: since ?? undefined,
     });
     if (error) throw new Error(error.message);
     return report as unknown as BusinessReport;
