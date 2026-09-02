@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 
+/** Server-paginated case list — safe on workspaces with tens of thousands of cases. */
 export const listCases = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
@@ -10,31 +11,40 @@ export const listCases = createServerFn({ method: "POST" })
       .object({
         businessId: z.string().uuid(),
         status: z.string().optional(),
+        outcome: z.string().optional(),
         search: z.string().max(200).optional(),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(5).max(200).default(25),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    const from = (data.page - 1) * data.pageSize;
+    const search = data.search?.trim().replace(/[%,()]/g, " ").trim();
+    const inner = search && !/^\d+$/.test(search);
+
     let query = context.supabase
       .from("removal_cases")
-      .select("*, reviews(reviewer_name,rating,review_text,review_date,ai_confidence,priority), locations(name)")
+      .select(
+        `*, reviews${inner ? "!inner" : ""}(reviewer_name,rating,review_text,review_date,ai_confidence,priority), locations(name)`,
+        { count: "exact" },
+      )
       .eq("business_id", data.businessId)
       .order("created_at", { ascending: false });
+
     if (data.status && data.status !== "all") query = query.eq("status", data.status as never);
-    const { data: rows, error } = await query;
+    if (data.outcome && data.outcome !== "all") query = query.eq("outcome", data.outcome as never);
+    if (search) {
+      if (/^\d+$/.test(search)) query = query.eq("case_number", Number(search));
+      else
+        query = query.or(`review_text.ilike.%${search}%,reviewer_name.ilike.%${search}%`, {
+          referencedTable: "reviews",
+        });
+    }
+
+    const { data: rows, error, count } = await query.range(from, from + data.pageSize - 1);
     if (error) throw new Error(error.message);
-    const search = data.search?.trim().toLowerCase();
-    const filtered = search
-      ? (rows ?? []).filter((row) => {
-          const review = row.reviews as { reviewer_name?: string; review_text?: string } | null;
-          return (
-            String(row.case_number).includes(search) ||
-            (review?.reviewer_name ?? "").toLowerCase().includes(search) ||
-            (review?.review_text ?? "").toLowerCase().includes(search)
-          );
-        })
-      : (rows ?? []);
-    return filtered;
+    return { rows: rows ?? [], total: count ?? 0, page: data.page, pageSize: data.pageSize };
   });
 
 export const getCase = createServerFn({ method: "POST" })
