@@ -269,3 +269,159 @@ export const createCasesBulk = createServerFn({ method: "POST" })
     }
     return { created: created?.length ?? 0, skipped: data.reviewIds.length - pending.length };
   });
+
+/**
+ * Multi-step appeal submission. Each call opens a new appeal round with a
+ * documented reason and (optionally) Google's report reference id.
+ */
+export const submitAppeal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        caseId: z.string().uuid(),
+        reason: z.string().min(10).max(4000),
+        googleReferenceId: z.string().max(200).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: current, error: readError } = await supabase
+      .from("removal_cases")
+      .select("id,business_id,case_number,appeal_round,status")
+      .eq("id", data.caseId)
+      .single();
+    if (readError) throw new Error(readError.message);
+    if (current.status === "new" || current.status === "reviewing")
+      throw new Error("Report the case to Google before filing an appeal.");
+
+    const round = (current.appeal_round ?? 0) + 1;
+    const now = new Date().toISOString();
+    const patch: Database["public"]["Tables"]["removal_cases"]["Update"] = {
+      status: "appeal",
+      appeal_reason: data.reason,
+      appeal_round: round,
+      appealed_at: now,
+      last_appeal_at: now,
+      outcome: "pending",
+    };
+    if (data.googleReferenceId !== undefined) patch.google_reference_id = data.googleReferenceId;
+
+    const { data: updated, error } = await supabase
+      .from("removal_cases")
+      .update(patch)
+      .eq("id", data.caseId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+
+    await supabase.from("case_events").insert({
+      case_id: updated.id,
+      business_id: updated.business_id,
+      actor_id: userId,
+      event_type: `appeal:round_${round}`,
+      message: data.reason,
+      metadata: { round, google_reference_id: data.googleReferenceId ?? null },
+    });
+    await supabase.from("notifications").insert({
+      user_id: userId,
+      business_id: updated.business_id,
+      type: "appeal_update",
+      title: `Case #${updated.case_number} — appeal round ${round} filed`,
+      body: data.reason.slice(0, 200),
+      link: "/cases",
+    });
+    return updated;
+  });
+
+/** Records an uploaded evidence file (upload itself happens client-side to storage). */
+export const attachCaseEvidence = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        caseId: z.string().uuid(),
+        filePath: z.string().min(3).max(500),
+        fileName: z.string().min(1).max(255),
+        contentType: z.string().max(120).nullable().optional(),
+        sizeBytes: z.number().int().min(0).max(20_971_520).nullable().optional(),
+        caption: z.string().max(300).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error: caseError } = await supabase
+      .from("removal_cases")
+      .select("business_id,case_number")
+      .eq("id", data.caseId)
+      .single();
+    if (caseError) throw new Error(caseError.message);
+    if (!data.filePath.startsWith(`${row.business_id}/`))
+      throw new Error("Evidence file path does not belong to this workspace.");
+
+    const { data: created, error } = await supabase
+      .from("case_attachments")
+      .insert({
+        case_id: data.caseId,
+        business_id: row.business_id,
+        uploaded_by: userId,
+        file_path: data.filePath,
+        file_name: data.fileName,
+        content_type: data.contentType ?? null,
+        size_bytes: data.sizeBytes ?? null,
+        caption: data.caption ?? null,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+
+    await supabase.from("case_events").insert({
+      case_id: data.caseId,
+      business_id: row.business_id,
+      actor_id: userId,
+      event_type: "evidence_uploaded",
+      message: `Evidence file attached: ${data.fileName}`,
+    });
+    return created;
+  });
+
+export const listCaseAttachments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ caseId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("case_attachments")
+      .select("*")
+      .eq("case_id", data.caseId)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    const signed = await Promise.all(
+      (rows ?? []).map(async (row) => {
+        const { data: url } = await context.supabase.storage
+          .from("case-evidence")
+          .createSignedUrl(row.file_path, 3600);
+        return { ...row, signedUrl: url?.signedUrl ?? null };
+      }),
+    );
+    return signed;
+  });
+
+export const deleteCaseAttachment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ attachmentId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: row, error: readError } = await supabase
+      .from("case_attachments")
+      .select("*")
+      .eq("id", data.attachmentId)
+      .single();
+    if (readError) throw new Error(readError.message);
+    await supabase.storage.from("case-evidence").remove([row.file_path]);
+    const { error } = await supabase.from("case_attachments").delete().eq("id", data.attachmentId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
