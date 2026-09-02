@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.business_report(uuid, timestamp with time zone) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.business_report(uuid, timestamp with time zone) TO authenticated, service_role;
