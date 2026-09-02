@@ -76,6 +76,60 @@ export type Database = {
         }
         Relationships: []
       }
+      case_attachments: {
+        Row: {
+          business_id: string
+          caption: string | null
+          case_id: string
+          content_type: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          size_bytes: number | null
+          uploaded_by: string
+        }
+        Insert: {
+          business_id: string
+          caption?: string | null
+          case_id: string
+          content_type?: string | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          size_bytes?: number | null
+          uploaded_by: string
+        }
+        Update: {
+          business_id?: string
+          caption?: string | null
+          case_id?: string
+          content_type?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          size_bytes?: number | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_attachments_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_attachments_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "removal_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_events: {
         Row: {
           actor_id: string | null
@@ -303,6 +357,8 @@ export type Database = {
       }
       removal_cases: {
         Row: {
+          appeal_reason: string | null
+          appeal_round: number
           appealed_at: string | null
           assigned_to: string | null
           business_id: string
@@ -310,8 +366,10 @@ export type Database = {
           created_at: string
           created_by: string
           evidence: Json
+          google_reference_id: string | null
           google_removed_at: string | null
           id: string
+          last_appeal_at: string | null
           location_id: string | null
           notes: string | null
           outcome: Database["public"]["Enums"]["removal_outcome"]
@@ -324,6 +382,8 @@ export type Database = {
           violation_category: Database["public"]["Enums"]["violation_category"]
         }
         Insert: {
+          appeal_reason?: string | null
+          appeal_round?: number
           appealed_at?: string | null
           assigned_to?: string | null
           business_id: string
@@ -331,8 +391,10 @@ export type Database = {
           created_at?: string
           created_by: string
           evidence?: Json
+          google_reference_id?: string | null
           google_removed_at?: string | null
           id?: string
+          last_appeal_at?: string | null
           location_id?: string | null
           notes?: string | null
           outcome?: Database["public"]["Enums"]["removal_outcome"]
@@ -345,6 +407,8 @@ export type Database = {
           violation_category?: Database["public"]["Enums"]["violation_category"]
         }
         Update: {
+          appeal_reason?: string | null
+          appeal_round?: number
           appealed_at?: string | null
           assigned_to?: string | null
           business_id?: string
@@ -352,8 +416,10 @@ export type Database = {
           created_at?: string
           created_by?: string
           evidence?: Json
+          google_reference_id?: string | null
           google_removed_at?: string | null
           id?: string
+          last_appeal_at?: string | null
           location_id?: string | null
           notes?: string | null
           outcome?: Database["public"]["Enums"]["removal_outcome"]
@@ -567,6 +633,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      business_report: {
+        Args: { _business_id: string; _since?: string }
+        Returns: Json
+      }
       has_business_access: { Args: { _business_id: string }; Returns: boolean }
       has_role: {
         Args: {
@@ -622,12 +692,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -651,11 +721,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -676,11 +746,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -701,11 +771,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -718,11 +788,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
