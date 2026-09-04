@@ -11,9 +11,11 @@ export type BusinessReport = {
     unscanned: number;
     flagged: number;
     high_priority: number;
+    legitimate_negative: number;
     removed: number;
   };
   rating_distribution: Record<string, number>;
+  priority_distribution: Record<string, number>;
   violation_distribution: Record<string, number>;
   monthly: { month: string; reviews: number; avg_rating: number; negative: number; flagged: number }[];
   cases: {
