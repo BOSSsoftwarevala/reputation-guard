@@ -51,29 +51,43 @@ export const Route = createFileRoute("/_authenticated/cases")({
 
 type CaseListRow = Awaited<ReturnType<typeof listCases>>["rows"][number];
 
+const PAGE_SIZE = 25;
+
 function CasesPage() {
   const { activeBusiness } = useWorkspace();
   const businessId = activeBusiness?.id ?? "";
   const fetchCases = useServerFn(listCases);
+  const fetchReport = useServerFn(getBusinessReport);
   const [status, setStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["cases", businessId, status, search],
-    queryFn: () => fetchCases({ data: { businessId, status, search: search || undefined } }),
+    queryKey: ["cases", businessId, status, search, page],
+    queryFn: () =>
+      fetchCases({
+        data: { businessId, status, search: search || undefined, page, pageSize: PAGE_SIZE },
+      }),
     enabled: Boolean(businessId),
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
+  });
+
+  const { data: report } = useQuery({
+    queryKey: ["report", businessId, "all"],
+    queryFn: () => fetchReport({ data: { businessId, days: null } }),
+    enabled: Boolean(businessId),
+    staleTime: 60_000,
   });
 
   const rows = useMemo(
     () => (Array.isArray(data) ? data : (data?.rows ?? [])) as CaseListRow[],
     [data],
   );
-  const counts = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const row of rows) map[row.status] = (map[row.status] ?? 0) + 1;
-    return map;
-  }, [rows]);
+  const total = data?.total ?? rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const caseStats = report?.cases;
 
   return (
     <div>
@@ -85,11 +99,17 @@ function CasesPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Open cases" value={rows.filter((r) => !["resolved", "rejected"].includes(r.status)).length} icon="cases" />
-        <KpiCard label="Removed by Google" value={rows.filter((r) => r.outcome === "removed_by_google").length} tone="success" icon="analytics" />
-        <KpiCard label="Still live" value={rows.filter((r) => r.outcome === "still_live").length} tone="magenta" icon="reports" />
-        <KpiCard label="Rejected" value={counts["rejected"] ?? 0} tone="danger" icon="alerts" />
+        <KpiCard
+          label="Open cases"
+          value={(caseStats?.total ?? 0) - (caseStats?.resolved ?? 0) - (caseStats?.rejected ?? 0)}
+          icon="cases"
+          hint={`${caseStats?.total ?? 0} cases in total`}
+        />
+        <KpiCard label="Removed by Google" value={caseStats?.removed_by_google ?? 0} tone="success" icon="analytics" />
+        <KpiCard label="Still live" value={caseStats?.still_live ?? 0} tone="magenta" icon="reports" />
+        <KpiCard label="Rejected" value={caseStats?.rejected ?? 0} tone="danger" icon="alerts" />
       </div>
+
 
 
       <Panel className="mt-6 overflow-hidden">
