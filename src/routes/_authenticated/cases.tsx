@@ -228,7 +228,35 @@ function CasesPage() {
             </table>
           </div>
         )}
+
+        {total > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 p-4 text-sm">
+            <p className="text-muted-foreground">
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} cases
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="glass rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="tabular-nums text-muted-foreground">
+                Page {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="glass rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </Panel>
+
 
       {openCaseId ? <CaseDrawer caseId={openCaseId} onClose={() => setOpenCaseId(null)} /> : null}
     </div>
