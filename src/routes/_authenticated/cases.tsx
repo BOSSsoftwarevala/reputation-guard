@@ -49,7 +49,7 @@ export const Route = createFileRoute("/_authenticated/cases")({
   ),
 });
 
-type CaseListRow = Awaited<ReturnType<typeof listCases>>[number];
+type CaseListRow = Awaited<ReturnType<typeof listCases>>["rows"][number];
 
 function CasesPage() {
   const { activeBusiness } = useWorkspace();
