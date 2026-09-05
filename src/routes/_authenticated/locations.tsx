@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { MapPin, Plus, Trash2 } from "lucide-react";
 import { deleteLocation, upsertLocation } from "@/lib/workspace.functions";
-import { getBusinessStats } from "@/lib/reviews.functions";
+import { getBusinessReport } from "@/lib/reports.functions";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
 import { GooglePanel } from "@/components/google-panel";
