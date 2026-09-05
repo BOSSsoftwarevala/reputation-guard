@@ -268,7 +268,14 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
   const fetchCase = useServerFn(getCase);
   const patchCase = useServerFn(updateCase);
   const postNote = useServerFn(addCaseNote);
+  const postAppeal = useServerFn(submitAppeal);
+  const recordEvidence = useServerFn(attachCaseEvidence);
+  const fetchAttachments = useServerFn(listCaseAttachments);
+  const removeAttachment = useServerFn(deleteCaseAttachment);
   const [note, setNote] = useState("");
+  const [appealReason, setAppealReason] = useState("");
+  const [googleRef, setGoogleRef] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["case", caseId],
