@@ -139,7 +139,10 @@ function CasesPage() {
           </div>
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(1);
+            }}
             className="glass rounded-xl px-3 py-2 text-sm outline-none"
             aria-label="Filter by status"
           >
