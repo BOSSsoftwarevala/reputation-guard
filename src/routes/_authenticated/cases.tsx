@@ -303,6 +303,38 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const appealMutation = useMutation({
+    mutationFn: () =>
+      postAppeal({
+        data: {
+          caseId,
+          reason: appealReason.trim(),
+          googleReferenceId: googleRef.trim() || null,
+        },
+      }),
+    onSuccess: () => {
+      setAppealReason("");
+      toast.success("Appeal round filed and logged in the case history");
+      void queryClient.invalidateQueries({ queryKey: ["case", caseId] });
+      void queryClient.invalidateQueries({ queryKey: ["cases"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const { data: attachments } = useQuery({
+    queryKey: ["case-attachments", caseId],
+    queryFn: () => fetchAttachments({ data: { caseId } }),
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: string) => removeAttachment({ data: { attachmentId } }),
+    onSuccess: () => {
+      toast.success("Evidence file removed");
+      void queryClient.invalidateQueries({ queryKey: ["case-attachments", caseId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const record = data?.case as Record<string, unknown> | undefined;
   const review = record?.["reviews"] as Record<string, unknown> | undefined;
   const business = record?.["businesses"] as Record<string, unknown> | undefined;
