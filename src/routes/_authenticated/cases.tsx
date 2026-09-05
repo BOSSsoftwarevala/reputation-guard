@@ -65,7 +65,10 @@ function CasesPage() {
     enabled: Boolean(businessId),
   });
 
-  const rows = useMemo(() => (data ?? []) as CaseListRow[], [data]);
+  const rows = useMemo(
+    () => (Array.isArray(data) ? data : (data?.rows ?? [])) as CaseListRow[],
+    [data],
+  );
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const row of rows) map[row.status] = (map[row.status] ?? 0) + 1;
