@@ -4,7 +4,18 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Download, Printer, Search } from "lucide-react";
-import { listCases, getCase, updateCase, addCaseNote } from "@/lib/cases.functions";
+import {
+  listCases,
+  getCase,
+  updateCase,
+  addCaseNote,
+  submitAppeal,
+  attachCaseEvidence,
+  listCaseAttachments,
+  deleteCaseAttachment,
+} from "@/lib/cases.functions";
+import { getBusinessReport } from "@/lib/reports.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { checkRemovalOutcomes } from "@/lib/google.functions";
 
 import { useWorkspace } from "@/components/workspace";
