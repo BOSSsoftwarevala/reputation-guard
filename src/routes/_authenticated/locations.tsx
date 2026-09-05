@@ -126,8 +126,8 @@ function LocationsPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <KpiCard label="Locations" value={locations.length} icon="locations" />
-        <KpiCard label="Reviews mapped" value={stats?.reviews.length ?? 0} tone="neon" icon="reviews" />
-        <KpiCard label="Open cases" value={stats?.cases.length ?? 0} tone="magenta" icon="cases" />
+        <KpiCard label="Reviews mapped" value={stats?.totals.reviews ?? 0} tone="neon" icon="reviews" />
+        <KpiCard label="Open cases" value={stats?.cases.total ?? 0} tone="magenta" icon="cases" />
       </div>
 
       <GooglePanel
