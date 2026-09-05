@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { MapPin, Plus, Trash2 } from "lucide-react";
 import { deleteLocation, upsertLocation } from "@/lib/workspace.functions";
-import { getBusinessStats } from "@/lib/reviews.functions";
+import { getBusinessReport } from "@/lib/reports.functions";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
 import { GooglePanel } from "@/components/google-panel";
@@ -53,30 +53,28 @@ function LocationsPage() {
   const queryClient = useQueryClient();
   const save = useServerFn(upsertLocation);
   const remove = useServerFn(deleteLocation);
-  const fetchStats = useServerFn(getBusinessStats);
+  const fetchReport = useServerFn(getBusinessReport);
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const { data: stats } = useQuery({
-    queryKey: ["stats", businessId],
-    queryFn: () => fetchStats({ data: { businessId } }),
+    queryKey: ["report", businessId, "all"],
+    queryFn: () => fetchReport({ data: { businessId, days: null } }),
     enabled: Boolean(businessId),
+    staleTime: 60_000,
   });
 
   const perLocation = useMemo(() => {
-    const reviews = stats?.reviews ?? [];
-    const cases = stats?.cases ?? [];
     const map = new Map<string, { reviews: number; avg: number; flagged: number; cases: number }>();
-    for (const location of locations) {
-      const scoped = reviews.filter((r) => r.location_id === location.id);
-      map.set(location.id, {
-        reviews: scoped.length,
-        avg: scoped.length ? scoped.reduce((sum, r) => sum + r.rating, 0) / scoped.length : 0,
-        flagged: scoped.filter((r) => r.violation_category && r.violation_category !== "none").length,
-        cases: cases.filter((c) => c.location_id === location.id).length,
+    for (const row of stats?.locations ?? []) {
+      map.set(row.id, {
+        reviews: Number(row.reviews),
+        avg: Number(row.avg_rating),
+        flagged: Number(row.flagged),
+        cases: Number(row.cases),
       });
     }
     return map;
-  }, [stats, locations]);
+  }, [stats]);
 
   const saveMutation = useMutation({
     mutationFn: (value: Draft) =>
@@ -128,8 +126,8 @@ function LocationsPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <KpiCard label="Locations" value={locations.length} icon="locations" />
-        <KpiCard label="Reviews mapped" value={stats?.reviews.length ?? 0} tone="neon" icon="reviews" />
-        <KpiCard label="Open cases" value={stats?.cases.length ?? 0} tone="magenta" icon="cases" />
+        <KpiCard label="Reviews mapped" value={stats?.totals.reviews ?? 0} tone="neon" icon="reviews" />
+        <KpiCard label="Open cases" value={stats?.cases.total ?? 0} tone="magenta" icon="cases" />
       </div>
 
       <GooglePanel

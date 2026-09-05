@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo } from "react";
-import { getBusinessStats } from "@/lib/reviews.functions";
+import { getBusinessReport } from "@/lib/reports.functions";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
 import { EmptyState, ErrorBlock, KpiCard, LoadingBlock, PageHeader, Panel } from "@/components/ui-kit";
@@ -40,85 +40,64 @@ export const Route = createFileRoute("/_authenticated/analytics")({
 function AnalyticsPage() {
   const { activeBusiness } = useWorkspace();
   const businessId = activeBusiness?.id ?? "";
-  const fetchStats = useServerFn(getBusinessStats);
+  const fetchReport = useServerFn(getBusinessReport);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["stats", businessId],
-    queryFn: () => fetchStats({ data: { businessId } }),
+    queryKey: ["report", businessId, "all"],
+    queryFn: () => fetchReport({ data: { businessId, days: null } }),
     enabled: Boolean(businessId),
+    staleTime: 60_000,
   });
 
   const model = useMemo(() => {
-    const reviews = data?.reviews ?? [];
-    const cases = data?.cases ?? [];
-    const locations = data?.locations ?? [];
-    const total = reviews.length;
+    const totals = data?.totals;
+    const total = totals?.reviews ?? 0;
+    const ratings = data?.rating_distribution ?? {};
+    const violations = data?.violation_distribution ?? {};
+    const caseStats = data?.cases;
 
     const ratingBuckets = [1, 2, 3, 4, 5].map((rating) => ({
       rating,
-      count: reviews.filter((r) => r.rating === rating).length,
+      count: Number(ratings[String(rating)] ?? 0),
     }));
 
     const violationCounts = VIOLATION_ORDER.map((category) => ({
       category,
-      count: reviews.filter((r) => r.violation_category === category).length,
+      count: Number(violations[category] ?? 0),
     })).filter((row) => row.count > 0 && row.category !== "none");
 
-    const byLocation = locations.map((location) => {
-      const scoped = reviews.filter((r) => r.location_id === location.id);
-      const scopedCases = cases.filter((c) => c.location_id === location.id);
-      const avg = scoped.length ? scoped.reduce((sum, r) => sum + r.rating, 0) / scoped.length : 0;
-      return {
-        id: location.id,
-        name: location.name,
-        reviews: scoped.length,
-        avg,
-        flagged: scoped.filter((r) => r.violation_category && r.violation_category !== "none").length,
-        cases: scopedCases.length,
-        removed: scopedCases.filter((c) => c.status === "resolved").length,
-      };
-    });
+    const byLocation = (data?.locations ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      reviews: Number(row.reviews),
+      avg: Number(row.avg_rating),
+      flagged: Number(row.flagged),
+      cases: Number(row.cases),
+      removed: Number(row.resolved_cases),
+    }));
 
-    const monthly = new Map<string, { sum: number; count: number; negative: number }>();
-    for (const review of reviews) {
-      const key = String(review.review_date).slice(0, 7);
-      const bucket = monthly.get(key) ?? { sum: 0, count: 0, negative: 0 };
-      bucket.sum += review.rating;
-      bucket.count += 1;
-      if (review.rating <= 2) bucket.negative += 1;
-      monthly.set(key, bucket);
-    }
-    const volume = Array.from(monthly.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([month, bucket]) => ({
-        month,
-        count: bucket.count,
-        negative: bucket.negative,
-        avg: bucket.sum / bucket.count,
-      }));
+    const volume = (data?.monthly ?? []).slice(-12).map((row) => ({
+      month: row.month,
+      count: Number(row.reviews),
+      negative: Number(row.negative),
+      avg: Number(row.avg_rating),
+    }));
 
-    const closed = cases.filter((c) => c.status === "resolved" || c.status === "rejected").length;
-    const resolved = cases.filter((c) => c.status === "resolved").length;
-    const statusCounts = cases.reduce<Record<string, number>>((acc, item) => {
-      acc[item.status] = (acc[item.status] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    const legit = reviews.filter((r) => r.is_legitimate_negative).length;
+    const resolved = caseStats?.resolved ?? 0;
+    const closed = resolved + (caseStats?.rejected ?? 0);
 
     return {
       total,
-      avg: total ? reviews.reduce((sum, r) => sum + r.rating, 0) / total : 0,
+      avg: Number(totals?.avg_rating ?? 0),
       ratingBuckets,
       violationCounts,
       byLocation,
       volume,
-      statusCounts,
+      statusCounts: caseStats?.by_status ?? {},
       successRate: closed ? Math.round((resolved / closed) * 100) : 0,
-      totalCases: cases.length,
-      legit,
-      flagged: reviews.filter((r) => r.violation_category && r.violation_category !== "none").length,
+      totalCases: caseStats?.total ?? 0,
+      legit: totals?.legitimate_negative ?? 0,
+      flagged: totals?.flagged ?? 0,
     };
   }, [data]);
 

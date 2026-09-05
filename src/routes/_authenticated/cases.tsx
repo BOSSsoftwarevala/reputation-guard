@@ -4,7 +4,18 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Download, Printer, Search } from "lucide-react";
-import { listCases, getCase, updateCase, addCaseNote } from "@/lib/cases.functions";
+import {
+  listCases,
+  getCase,
+  updateCase,
+  addCaseNote,
+  submitAppeal,
+  attachCaseEvidence,
+  listCaseAttachments,
+  deleteCaseAttachment,
+} from "@/lib/cases.functions";
+import { getBusinessReport } from "@/lib/reports.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { checkRemovalOutcomes } from "@/lib/google.functions";
 
 import { useWorkspace } from "@/components/workspace";
@@ -51,29 +62,43 @@ export const Route = createFileRoute("/_authenticated/cases")({
 
 type CaseListRow = Awaited<ReturnType<typeof listCases>>["rows"][number];
 
+const PAGE_SIZE = 25;
+
 function CasesPage() {
   const { activeBusiness } = useWorkspace();
   const businessId = activeBusiness?.id ?? "";
   const fetchCases = useServerFn(listCases);
+  const fetchReport = useServerFn(getBusinessReport);
   const [status, setStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["cases", businessId, status, search],
-    queryFn: () => fetchCases({ data: { businessId, status, search: search || undefined } }),
+    queryKey: ["cases", businessId, status, search, page],
+    queryFn: () =>
+      fetchCases({
+        data: { businessId, status, search: search || undefined, page, pageSize: PAGE_SIZE },
+      }),
     enabled: Boolean(businessId),
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
+  });
+
+  const { data: report } = useQuery({
+    queryKey: ["report", businessId, "all"],
+    queryFn: () => fetchReport({ data: { businessId, days: null } }),
+    enabled: Boolean(businessId),
+    staleTime: 60_000,
   });
 
   const rows = useMemo(
     () => (Array.isArray(data) ? data : (data?.rows ?? [])) as CaseListRow[],
     [data],
   );
-  const counts = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const row of rows) map[row.status] = (map[row.status] ?? 0) + 1;
-    return map;
-  }, [rows]);
+  const total = data?.total ?? rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const caseStats = report?.cases;
 
   return (
     <div>
@@ -85,11 +110,17 @@ function CasesPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Open cases" value={rows.filter((r) => !["resolved", "rejected"].includes(r.status)).length} icon="cases" />
-        <KpiCard label="Removed by Google" value={rows.filter((r) => r.outcome === "removed_by_google").length} tone="success" icon="analytics" />
-        <KpiCard label="Still live" value={rows.filter((r) => r.outcome === "still_live").length} tone="magenta" icon="reports" />
-        <KpiCard label="Rejected" value={counts["rejected"] ?? 0} tone="danger" icon="alerts" />
+        <KpiCard
+          label="Open cases"
+          value={(caseStats?.total ?? 0) - (caseStats?.resolved ?? 0) - (caseStats?.rejected ?? 0)}
+          icon="cases"
+          hint={`${caseStats?.total ?? 0} cases in total`}
+        />
+        <KpiCard label="Removed by Google" value={caseStats?.removed_by_google ?? 0} tone="success" icon="analytics" />
+        <KpiCard label="Still live" value={caseStats?.still_live ?? 0} tone="magenta" icon="reports" />
+        <KpiCard label="Rejected" value={caseStats?.rejected ?? 0} tone="danger" icon="alerts" />
       </div>
+
 
 
       <Panel className="mt-6 overflow-hidden">
@@ -98,14 +129,20 @@ function CasesPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
               placeholder="Search case number, reviewer or text"
               className="glass w-full rounded-xl py-2 pl-9 pr-3 text-sm outline-none focus:neon-outline"
             />
           </div>
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(1);
+            }}
             className="glass rounded-xl px-3 py-2 text-sm outline-none"
             aria-label="Filter by status"
           >
@@ -191,7 +228,35 @@ function CasesPage() {
             </table>
           </div>
         )}
+
+        {total > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 p-4 text-sm">
+            <p className="text-muted-foreground">
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} cases
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="glass rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="tabular-nums text-muted-foreground">
+                Page {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="glass rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </Panel>
+
 
       {openCaseId ? <CaseDrawer caseId={openCaseId} onClose={() => setOpenCaseId(null)} /> : null}
     </div>
@@ -203,7 +268,14 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
   const fetchCase = useServerFn(getCase);
   const patchCase = useServerFn(updateCase);
   const postNote = useServerFn(addCaseNote);
+  const postAppeal = useServerFn(submitAppeal);
+  const recordEvidence = useServerFn(attachCaseEvidence);
+  const fetchAttachments = useServerFn(listCaseAttachments);
+  const removeAttachment = useServerFn(deleteCaseAttachment);
   const [note, setNote] = useState("");
+  const [appealReason, setAppealReason] = useState("");
+  const [googleRef, setGoogleRef] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["case", caseId],
@@ -227,6 +299,38 @@ function CaseDrawer({ caseId, onClose }: { caseId: string; onClose: () => void }
       setNote("");
       toast.success("Note added to case history");
       void queryClient.invalidateQueries({ queryKey: ["case", caseId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const appealMutation = useMutation({
+    mutationFn: () =>
+      postAppeal({
+        data: {
+          caseId,
+          reason: appealReason.trim(),
+          googleReferenceId: googleRef.trim() || null,
+        },
+      }),
+    onSuccess: () => {
+      setAppealReason("");
+      toast.success("Appeal round filed and logged in the case history");
+      void queryClient.invalidateQueries({ queryKey: ["case", caseId] });
+      void queryClient.invalidateQueries({ queryKey: ["cases"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const { data: attachments } = useQuery({
+    queryKey: ["case-attachments", caseId],
+    queryFn: () => fetchAttachments({ data: { caseId } }),
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: string) => removeAttachment({ data: { attachmentId } }),
+    onSuccess: () => {
+      toast.success("Evidence file removed");
+      void queryClient.invalidateQueries({ queryKey: ["case-attachments", caseId] });
     },
     onError: (err: Error) => toast.error(err.message),
   });

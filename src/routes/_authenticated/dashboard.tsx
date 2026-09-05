@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo } from "react";
-import { getBusinessStats } from "@/lib/reviews.functions";
+import { getBusinessReport } from "@/lib/reports.functions";
 import { useWorkspace } from "@/components/workspace";
 import { BusinessGate } from "@/components/business-gate";
 import { EmptyState, ErrorBlock, KpiCard, LoadingBlock, PageHeader, Panel } from "@/components/ui-kit";
@@ -30,61 +30,42 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function DashboardPage() {
   const { activeBusiness } = useWorkspace();
-  const fetchStats = useServerFn(getBusinessStats);
+  const fetchReport = useServerFn(getBusinessReport);
   const businessId = activeBusiness?.id ?? "";
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["stats", businessId],
-    queryFn: () => fetchStats({ data: { businessId } }),
+    queryKey: ["report", businessId, "all"],
+    queryFn: () => fetchReport({ data: { businessId, days: null } }),
     enabled: Boolean(businessId),
+    staleTime: 60_000,
   });
 
   const derived = useMemo(() => {
-    const reviews = data?.reviews ?? [];
-    const cases = data?.cases ?? [];
-    const total = reviews.length;
-    const avg = total ? reviews.reduce((sum, r) => sum + r.rating, 0) / total : 0;
-    const flagged = reviews.filter(
-      (r) => r.violation_category && r.violation_category !== "none",
-    ).length;
-    const scanned = reviews.filter((r) => r.scan_status === "scanned").length;
+    const totals = data?.totals;
+    const caseStats = data?.cases;
+    const priority = data?.priority_distribution ?? {};
     const priorityCounts: Record<ReviewPriority, number> = {
-      high: 0,
-      medium: 0,
-      review_required: 0,
-      normal: 0,
+      high: Number(priority["high"] ?? 0),
+      medium: Number(priority["medium"] ?? 0),
+      review_required: Number(priority["review_required"] ?? 0),
+      normal: Number(priority["normal"] ?? 0),
     };
-    for (const review of reviews) priorityCounts[review.priority as ReviewPriority]++;
-
-    const statusCounts = cases.reduce<Record<string, number>>((acc, item) => {
-      acc[item.status] = (acc[item.status] ?? 0) + 1;
-      return acc;
-    }, {});
-    const resolved = cases.filter((c) => c.status === "resolved").length;
-    const closed = cases.filter((c) => c.status === "resolved" || c.status === "rejected").length;
-
-    const months = new Map<string, { sum: number; count: number }>();
-    for (const review of reviews) {
-      const key = String(review.review_date).slice(0, 7);
-      const bucket = months.get(key) ?? { sum: 0, count: 0 };
-      bucket.sum += review.rating;
-      bucket.count += 1;
-      months.set(key, bucket);
-    }
-    const trend = Array.from(months.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
+    const resolved = caseStats?.resolved ?? 0;
+    const rejected = caseStats?.rejected ?? 0;
+    const closed = resolved + rejected;
+    const trend = (data?.monthly ?? [])
       .slice(-12)
-      .map(([month, bucket]) => ({ month, avg: bucket.sum / bucket.count, count: bucket.count }));
+      .map((row) => ({ month: row.month, avg: Number(row.avg_rating), count: Number(row.reviews) }));
 
     return {
-      total,
-      avg,
-      flagged,
-      scanned,
+      total: totals?.reviews ?? 0,
+      avg: Number(totals?.avg_rating ?? 0),
+      flagged: totals?.flagged ?? 0,
+      scanned: totals?.scanned ?? 0,
       priorityCounts,
-      statusCounts,
-      openCases: cases.length - closed,
-      totalCases: cases.length,
+      statusCounts: caseStats?.by_status ?? {},
+      openCases: (caseStats?.total ?? 0) - closed,
+      totalCases: caseStats?.total ?? 0,
       successRate: closed ? Math.round((resolved / closed) * 100) : 0,
       trend,
     };
