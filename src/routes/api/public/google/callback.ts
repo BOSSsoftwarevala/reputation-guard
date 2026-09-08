@@ -24,6 +24,13 @@ export const Route = createFileRoute("/api/public/google/callback")({
         const parsed = verifyState(state);
         if (!parsed) return back({ google: "error", message: "Invalid or expired authorization state." });
 
+        // Must exactly match the redirect_uri sent when starting the OAuth flow
+        // (which trusts the forwarded proto/host behind nginx), or Google's
+        // token exchange rejects it as a mismatch.
+        const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+        const host = request.headers.get("x-forwarded-host") ?? url.host;
+        const redirectUri = `${proto}://${host}/api/public/google/callback`;
+
         try {
           const { saveConnection, autoLinkSingleLocation, syncBusinessReviews } = await import(
             "@/lib/google-sync.server"
@@ -32,7 +39,7 @@ export const Route = createFileRoute("/api/public/google/callback")({
             businessId: parsed.businessId,
             userId: parsed.userId,
             code,
-            redirectUri: `${url.origin}/api/public/google/callback`,
+            redirectUri,
           });
 
           // Fully automated path: single-location workspaces link + sync without

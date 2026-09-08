@@ -16,8 +16,14 @@ async function assertAccess(
 }
 
 function callbackUrl() {
-  const url = new URL(getRequest().url);
-  return `${url.origin}/api/public/google/callback`;
+  const request = getRequest();
+  const url = new URL(request.url);
+  // Behind nginx the raw request URL is always http://, so trust the
+  // forwarded proto/host headers to build the public-facing callback URL —
+  // otherwise Google rejects the OAuth redirect_uri as a mismatch.
+  const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+  const host = request.headers.get("x-forwarded-host") ?? url.host;
+  return `${proto}://${host}/api/public/google/callback`;
 }
 
 export const getGoogleStatus = createServerFn({ method: "GET" })
