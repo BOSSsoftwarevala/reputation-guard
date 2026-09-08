@@ -36,10 +36,17 @@ export function GooglePanel({
     const params = new URLSearchParams(window.location.search);
     const flag = params.get("google");
     if (!flag) return;
-    if (flag === "connected") toast.success("Google Business Profile connected.");
-    else toast.error(params.get("message") ?? "Google connection failed.");
+    if (flag === "connected") {
+      toast.success(
+        params.get("synced") === "1"
+          ? "Google connected — reviews are importing and the AI scan will start automatically."
+          : "Google Business Profile connected.",
+      );
+    } else toast.error(params.get("message") ?? "Google connection failed.");
     window.history.replaceState({}, "", window.location.pathname);
     void queryClient.invalidateQueries({ queryKey: ["google-status"] });
+    void queryClient.invalidateQueries({ queryKey: ["reviews"] });
+    void queryClient.invalidateQueries({ queryKey: ["stats"] });
   }, [queryClient]);
 
   const { data: status, isLoading } = useQuery({

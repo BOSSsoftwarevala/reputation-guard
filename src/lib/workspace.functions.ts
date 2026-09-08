@@ -65,6 +65,53 @@ export const createBusiness = createServerFn({ method: "POST" })
     return business;
   });
 
+/**
+ * One-step onboarding: the operator pastes a Google Business URL, we derive a
+ * business name (falling back to "My Business") and create both the business
+ * and its first location in a single call, so the very next step is just the
+ * Google "Allow" consent screen — no manual forms in between.
+ */
+export const createBusinessFromUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        url: z.string().min(1).max(500),
+        name: z.string().max(120).nullable().optional(),
+        placeId: z.string().max(200).nullable().optional(),
+      })
+      .parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const businessName = data.name?.trim() || "My Business";
+
+    const { data: business, error } = await supabase
+      .from("businesses")
+      .insert({ owner_id: userId, name: businessName, website: data.url })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+
+    await supabase.from("business_members").insert({
+      business_id: business.id,
+      user_id: userId,
+      role: "admin",
+    });
+
+    const { data: location, error: locationError } = await supabase
+      .from("locations")
+      .insert({
+        business_id: business.id,
+        name: businessName,
+        google_place_id: data.placeId ?? null,
+      })
+      .select()
+      .single();
+    if (locationError) throw new Error(locationError.message);
+
+    return { business, location };
+  });
+
 export const upsertLocation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>

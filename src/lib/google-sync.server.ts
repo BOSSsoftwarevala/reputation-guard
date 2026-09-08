@@ -128,6 +128,32 @@ export async function availableGoogleLocations(businessId: string) {
   return out;
 }
 
+/**
+ * Zero-click finish for the simplified onboarding: right after the operator grants
+ * Google consent, if the workspace has exactly one location and the connected
+ * account manages exactly one Google Business Profile location, link them
+ * automatically so the very next step is just "reviews are importing" — no manual
+ * location-matching screen for the common single-location case.
+ */
+export async function autoLinkSingleLocation(businessId: string) {
+  const db = await admin();
+  const { data: locations } = await db
+    .from("locations")
+    .select("id,google_resource_name")
+    .eq("business_id", businessId);
+  const unlinked = (locations ?? []).filter((l) => !l.google_resource_name);
+  if (unlinked.length !== 1) return false;
+
+  const googleLocations = await availableGoogleLocations(businessId).catch(() => []);
+  if (googleLocations.length !== 1) return false;
+
+  const { error } = await db
+    .from("locations")
+    .update({ google_resource_name: googleLocations[0]!.name })
+    .eq("id", unlinked[0]!.id);
+  return !error;
+}
+
 export type SyncSummary = {
   locations: number;
   fetched: number;

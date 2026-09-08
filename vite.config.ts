@@ -7,6 +7,9 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  // The plugin defaults nitro to `cloudflare-module`, which emits a wrangler worker.
+  // This app is self-hosted on a VPS behind nginx, so it needs a plain Node server build.
+  nitro: { preset: "node-server" },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
