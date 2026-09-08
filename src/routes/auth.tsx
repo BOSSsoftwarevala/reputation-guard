@@ -1,12 +1,23 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import { Icon3D } from "@/components/icon-3d";
 
+// Only allow same-origin, in-app relative paths as a redirect target so this can
+// never be abused as an open redirect.
+function sanitizeRedirect(value: string | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  return value;
+}
+
 export const Route = createFileRoute("/auth")({
+  validateSearch: z.object({
+    redirect: z.string().optional(),
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — OrbitRep Reputation Intelligence" },
@@ -24,6 +35,8 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { redirect: redirectParam } = Route.useSearch();
+  const redirectTo = sanitizeRedirect(redirectParam);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,9 +47,9 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard" });
+      if (data.session) navigate({ to: redirectTo });
     });
-  }, [navigate]);
+  }, [navigate, redirectTo]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -49,18 +62,18 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: `${window.location.origin}${redirectTo}`,
             data: { full_name: fullName },
           },
         });
         if (signUpError) throw signUpError;
         const { data } = await supabase.auth.getSession();
-        if (data.session) navigate({ to: "/dashboard" });
+        if (data.session) navigate({ to: redirectTo });
         else setNotice("Check your inbox to confirm your email, then sign in.");
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
-        navigate({ to: "/dashboard" });
+        navigate({ to: redirectTo });
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Authentication failed.");
@@ -79,7 +92,7 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    navigate({ to: "/dashboard" });
+    navigate({ to: redirectTo });
   };
 
   return (
