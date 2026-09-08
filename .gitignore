@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+ssh-run.mjs
+sftp-upload.mjs
+output-deploy.tar.gz
