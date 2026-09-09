@@ -34,3 +34,9 @@ dist-ssr
 ssh-run.mjs
 sftp-upload.mjs
 output-deploy.tar.gz
+
+# Local secrets — already tracked in repo history from before this rule was
+# added; see final audit report for the required secret-rotation follow-up.
+.env
+.env.*
+!.env.example
