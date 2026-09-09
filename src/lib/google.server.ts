@@ -11,7 +11,7 @@ const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const ACCOUNTS_API = "https://mybusinessaccountmanagement.googleapis.com/v1";
 const INFO_API = "https://mybusinessbusinessinformation.googleapis.com/v1";
 const REVIEWS_API = "https://mybusiness.googleapis.com/v4";
-const PLACES_API = "https://maps.googleapis.com/maps/api/place";
+const PLACES_API_NEW = "https://places.googleapis.com/v1";
 
 export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/business.manage";
 
@@ -247,32 +247,25 @@ export async function fetchAllReviews(
   return out;
 }
 
-type PlacesFindResponse = {
-  status: string;
-  error_message?: string;
-  candidates?: { place_id?: string; name?: string; formatted_address?: string }[];
+type PlacesNewPlace = {
+  id?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  googleMapsUri?: string;
+  reviews?: PlacesNewReview[];
 };
 
-type PlacesReview = {
-  author_name?: string;
-  author_url?: string;
+type PlacesNewSearchResponse = {
+  places?: PlacesNewPlace[];
+};
+
+type PlacesNewReview = {
+  name?: string;
+  authorAttribution?: { displayName?: string; uri?: string };
   rating?: number;
-  text?: string;
-  time?: number;
-};
-
-type PlacesDetailsResponse = {
-  status: string;
-  error_message?: string;
-  result?: {
-    place_id?: string;
-    name?: string;
-    formatted_address?: string;
-    url?: string;
-    rating?: number;
-    user_ratings_total?: number;
-    reviews?: PlacesReview[];
-  };
+  text?: { text?: string };
+  originalText?: { text?: string };
+  publishTime?: string;
 };
 
 function mapsApiKey() {
@@ -281,17 +274,27 @@ function mapsApiKey() {
   return key;
 }
 
-async function placesGet<T extends { status: string; error_message?: string }>(path: string, params: Record<string, string>) {
-  const url = new URL(`${PLACES_API}/${path}/json`);
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-  url.searchParams.set("key", mapsApiKey());
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Google Places API ${response.status}: ${response.statusText}`);
-  const body = (await response.json()) as T;
-  if (body.status !== "OK") {
-    throw new Error(`Google Places API ${body.status}: ${body.error_message ?? "No matching place/reviews returned."}`);
+async function placesNew<T>(path: string, init: RequestInit, fieldMask: string) {
+  const response = await fetch(`${PLACES_API_NEW}/${path}`, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      "X-Goog-Api-Key": mapsApiKey(),
+      "X-Goog-FieldMask": fieldMask,
+      ...init.headers,
+    },
+  });
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const body = (await response.json()) as { error?: { message?: string; status?: string } };
+      message = body.error?.message ?? body.error?.status ?? message;
+    } catch {
+      // Keep the HTTP status text for non-JSON errors.
+    }
+    throw new Error(`Google Places API ${response.status}: ${message}`);
   }
-  return body;
+  return (await response.json()) as T;
 }
 
 async function resolveGoogleMapsUrl(raw: string) {
@@ -303,13 +306,13 @@ async function resolveGoogleMapsUrl(raw: string) {
   }
 }
 
-function reviewSourceId(placeId: string, review: PlacesReview) {
+function reviewSourceId(placeId: string, review: PlacesNewReview) {
   const key = [
     placeId,
-    review.author_name ?? "Anonymous",
-    review.time ?? "",
+    review.name ?? review.authorAttribution?.displayName ?? "Anonymous",
+    review.publishTime ?? "",
     review.rating ?? "",
-    review.text ?? "",
+    review.text?.text ?? review.originalText?.text ?? "",
   ].join("|");
   return `places-${createHash("sha256").update(key).digest("hex").slice(0, 24)}`;
 }
@@ -333,42 +336,45 @@ export async function fetchPublicPlaceReviewsFromUrl(raw: string): Promise<{
 
   if (!placeId) {
     const query = parsed.name ?? raw;
-    const found = await placesGet<PlacesFindResponse>("findplacefromtext", {
-      input: query,
-      inputtype: "textquery",
-      fields: "place_id,name,formatted_address",
-    });
-    placeId = found.candidates?.[0]?.place_id ?? null;
+    const found = await placesNew<PlacesNewSearchResponse>(
+      "places:searchText",
+      {
+        method: "POST",
+        body: JSON.stringify({ textQuery: query, pageSize: 1 }),
+      },
+      "places.id,places.displayName,places.formattedAddress",
+    );
+    placeId = found.places?.[0]?.id ?? null;
   }
 
   if (!placeId) throw new Error("Google could not identify a place from that URL.");
 
-  const details = await placesGet<PlacesDetailsResponse>("details", {
-    place_id: placeId,
-    fields: "place_id,name,formatted_address,url,rating,user_ratings_total,reviews",
-    reviews_sort: "newest",
-  });
-  const place = details.result;
-  if (!place?.place_id) throw new Error("Google Places did not return a usable place record.");
+  const place = await placesNew<PlacesNewPlace>(
+    `places/${encodeURIComponent(placeId)}`,
+    { method: "GET" },
+    "id,displayName,formattedAddress,googleMapsUri,reviews",
+  );
+  if (!place.id) throw new Error("Google Places did not return a usable place record.");
 
   const reviews = (place.reviews ?? []).map((review) => {
-    const source = reviewSourceId(place.place_id!, review);
+    const source = review.name ?? reviewSourceId(place.id!, review);
+    const published = review.publishTime ? new Date(review.publishTime) : new Date();
     return {
-      google_review_name: `places/${place.place_id}/reviews/${source}`,
-      source_review_id: source,
-      reviewer_name: review.author_name?.trim() || "Anonymous",
-      reviewer_profile_url: review.author_url ?? null,
+      google_review_name: source.startsWith("places/") ? source : `places/${place.id}/reviews/${source}`,
+      source_review_id: source.split("/").pop() ?? source,
+      reviewer_name: review.authorAttribution?.displayName?.trim() || "Anonymous",
+      reviewer_profile_url: review.authorAttribution?.uri ?? null,
       rating: Math.min(5, Math.max(1, Math.round(review.rating ?? 5))),
-      review_text: review.text ?? "",
-      review_date: new Date((review.time ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+      review_text: review.text?.text ?? review.originalText?.text ?? "",
+      review_date: (Number.isNaN(published.getTime()) ? new Date() : published).toISOString(),
     };
   });
 
   return {
-    placeId: place.place_id,
-    placeName: place.name ?? parsed.name ?? "Google Business",
-    placeUrl: place.url ?? null,
-    address: place.formatted_address ?? null,
+    placeId: place.id,
+    placeName: place.displayName?.text ?? parsed.name ?? "Google Business",
+    placeUrl: place.googleMapsUri ?? null,
+    address: place.formattedAddress ?? null,
     reviews,
   };
 }
