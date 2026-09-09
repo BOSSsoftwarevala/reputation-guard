@@ -155,13 +155,21 @@ export function GooglePanel({
               </button>
             </>
           ) : (
-            <button
-              onClick={() => connectMutation.mutate()}
-              disabled={connectMutation.isPending || !businessId}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet to-neon px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-            >
-              {connectMutation.isPending ? "Redirecting…" : "Connect Google"}
-            </button>
+            <div className="flex flex-col items-start gap-2">
+              <p className="max-w-xl text-xs text-muted-foreground">
+                Connect your Google Business Profile so we can securely access your business
+                information and reviews for review analysis and management. You&apos;ll choose your
+                Google account and approve access on Google&apos;s own consent screen — we never see or
+                store your Google password.
+              </p>
+              <button
+                onClick={() => connectMutation.mutate()}
+                disabled={connectMutation.isPending || !businessId}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet to-neon px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+              >
+                {connectMutation.isPending ? "Redirecting to Google…" : "Connect Google Business Profile"}
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -6,6 +6,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const ACCOUNTS_API = "https://mybusinessaccountmanagement.googleapis.com/v1";
 const INFO_API = "https://mybusinessbusinessinformation.googleapis.com/v1";
 const REVIEWS_API = "https://mybusiness.googleapis.com/v4";
@@ -107,6 +108,25 @@ export async function refreshAccessToken(refreshToken: string): Promise<GoogleTo
     );
   }
   return (await response.json()) as GoogleTokens;
+}
+
+/**
+ * Revoke a stored token with Google so the client's Google account no longer
+ * shows this app as authorized. Best-effort: disconnect must still succeed
+ * locally even if Google's revoke endpoint is unreachable or the token was
+ * already invalidated on Google's side.
+ */
+export async function revokeToken(token: string): Promise<boolean> {
+  try {
+    const response = await fetch(REVOKE_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchGoogleEmail(accessToken: string) {

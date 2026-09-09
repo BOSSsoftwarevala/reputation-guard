@@ -9,6 +9,7 @@ import {
   listAccounts,
   listLocations,
   refreshAccessToken,
+  revokeToken,
 } from "./google.server";
 
 type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
@@ -111,6 +112,12 @@ export async function saveConnection(input: {
 
 export async function disconnect(businessId: string) {
   const db = await admin();
+  const conn = await loadConnection(businessId);
+  // Revoke with Google first (best-effort) so the client's Google account no
+  // longer lists this app as an authorized third party, then remove the
+  // locally stored connection regardless of whether the revoke succeeded.
+  const tokenToRevoke = conn?.refresh_token || conn?.access_token;
+  if (tokenToRevoke) await revokeToken(tokenToRevoke);
   const { error } = await db.from("google_connections").delete().eq("business_id", businessId);
   if (error) throw new Error(error.message);
 }
