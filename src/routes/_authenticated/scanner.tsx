@@ -154,7 +154,7 @@ function ScannerPage() {
       />
 
       <Panel className="mb-4 p-5">
-        <h2 className="font-display text-lg font-semibold">Test from a Google Business/Profile URL</h2>
+        <h2 className="font-display text-lg font-semibold">Test from a Google Review/Business URL</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Paste a Google Maps or Business Profile URL. While Google Business Profile API quota approval is
           pending, this uses the official Google Places API to fetch real public review snippets, then runs
