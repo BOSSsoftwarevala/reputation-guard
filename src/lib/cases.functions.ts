@@ -103,7 +103,20 @@ export const createCase = createServerFn({ method: "POST" })
       })
       .select()
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      // A concurrent request may have created the case between our existence
+      // check and this insert (review_id has a DB-level UNIQUE constraint).
+      // Return the now-existing case instead of surfacing a spurious error.
+      if (error.code === "23505") {
+        const { data: raceWinner } = await supabase
+          .from("removal_cases")
+          .select("*")
+          .eq("review_id", data.reviewId)
+          .maybeSingle();
+        if (raceWinner) return raceWinner;
+      }
+      throw new Error(error.message);
+    }
 
     await supabase.from("case_events").insert({
       case_id: created.id,
