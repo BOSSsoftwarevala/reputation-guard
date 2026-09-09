@@ -31,7 +31,7 @@ function credentials() {
 }
 
 function stateSecret() {
-  return process.env["LOVABLE_CRON_SECRET"] ?? process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "orbitrep";
+  return process.env["CRON_SECRET"] ?? process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "orbitrep";
 }
 
 export function signState(payload: { businessId: string; userId: string; redirectTo: string }) {
