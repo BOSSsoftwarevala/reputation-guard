@@ -80,6 +80,22 @@ export const createCase = createServerFn({ method: "POST" })
       .single();
     if (reviewError) throw new Error(reviewError.message);
 
+    // A case may only be opened for a review the AI has actually scanned and
+    // flagged as a genuine policy violation. This prevents unscanned reviews
+    // (violation_category null) and reviews the AI cleared (violation_category
+    // "none", or is_legitimate_negative true) from ever entering the removal
+    // workflow — enforced here as well as hidden client-side, since the
+    // client check alone is not a security/policy boundary.
+    if (review.scan_status !== "scanned") {
+      throw new Error("This review hasn't been scanned by the AI yet. Run the AI scanner first.");
+    }
+    if (!review.violation_category || review.violation_category === "none") {
+      throw new Error("The AI did not find a policy violation for this review, so it isn't removal-eligible.");
+    }
+    if (review.is_legitimate_negative) {
+      throw new Error("This review is marked as legitimate negative feedback and isn't removal-eligible.");
+    }
+
     const { data: existing } = await supabase
       .from("removal_cases")
       .select("id")
@@ -94,7 +110,7 @@ export const createCase = createServerFn({ method: "POST" })
         business_id: review.business_id,
         review_id: review.id,
         location_id: review.location_id,
-        violation_category: review.violation_category ?? "other",
+        violation_category: review.violation_category,
         evidence,
         notes: data.notes ?? null,
         created_by: userId,
@@ -239,17 +255,27 @@ export const createCasesBulk = createServerFn({ method: "POST" })
       .in("review_id", data.reviewIds);
     const already = new Set((existing ?? []).map((row) => row.review_id));
 
-    const pending = (reviews ?? []).filter((review) => !already.has(review.id));
-    if (pending.length === 0) return { created: 0, skipped: data.reviewIds.length };
+    // Only genuinely AI-flagged, scanned reviews are removal-eligible — same
+    // rule enforced in createCase. Unscanned/clear/legitimate-negative
+    // reviews are silently skipped rather than becoming cases.
+    const eligible = (reviews ?? []).filter(
+      (review) =>
+        !already.has(review.id) &&
+        review.scan_status === "scanned" &&
+        review.violation_category &&
+        review.violation_category !== "none" &&
+        !review.is_legitimate_negative,
+    );
+    if (eligible.length === 0) return { created: 0, skipped: data.reviewIds.length };
 
     const { data: created, error: insertError } = await supabase
       .from("removal_cases")
       .insert(
-        pending.map((review) => ({
+        eligible.map((review) => ({
           business_id: review.business_id,
           review_id: review.id,
           location_id: review.location_id,
-          violation_category: review.violation_category ?? "other",
+          violation_category: review.violation_category!,
           evidence: Array.isArray(review.ai_evidence) ? review.ai_evidence : [],
           created_by: userId,
           assigned_to: userId,
@@ -280,7 +306,7 @@ export const createCasesBulk = createServerFn({ method: "POST" })
         link: "/cases",
       });
     }
-    return { created: created?.length ?? 0, skipped: data.reviewIds.length - pending.length };
+    return { created: created?.length ?? 0, skipped: data.reviewIds.length - eligible.length };
   });
 
 /**

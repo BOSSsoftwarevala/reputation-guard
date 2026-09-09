@@ -43,6 +43,11 @@ export function ReviewDrawer({
 
   const evidence = Array.isArray(review.ai_evidence) ? (review.ai_evidence as string[]) : [];
   const hasCase = (review.removal_cases?.length ?? 0) > 0 || caseMutation.isSuccess;
+  const isEligible =
+    review.scan_status === "scanned" &&
+    !!review.violation_category &&
+    review.violation_category !== "none" &&
+    !review.is_legitimate_negative;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -100,7 +105,7 @@ export function ReviewDrawer({
           </h3>
           {hasCase ? (
             <p className="mt-2 text-sm text-success">A removal case already exists for this review.</p>
-          ) : (
+          ) : isEligible ? (
             <button
               onClick={() => caseMutation.mutate()}
               disabled={caseMutation.isPending}
@@ -109,6 +114,12 @@ export function ReviewDrawer({
               {caseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Open removal case
             </button>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {review.scan_status !== "scanned"
+                ? "This review hasn't been scanned yet, so it isn't removal-eligible."
+                : "The AI did not find a policy violation, so this review isn't removal-eligible."}
+            </p>
           )}
           {caseMutation.error ? (
             <p className="mt-2 text-sm text-danger">{(caseMutation.error as Error).message}</p>
