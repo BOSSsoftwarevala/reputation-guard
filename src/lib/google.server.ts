@@ -317,6 +317,10 @@ function reviewSourceId(placeId: string, review: PlacesNewReview) {
   return `places-${createHash("sha256").update(key).digest("hex").slice(0, 24)}`;
 }
 
+function placesResourceId(placeId: string) {
+  return placeId.startsWith("places/") ? placeId.slice("places/".length) : placeId;
+}
+
 /**
  * Temporary legitimate fallback for demos while GBP Basic API Access quota is 0:
  * reads public Google Places review snippets for a pasted Maps/GBP URL using the
@@ -349,8 +353,9 @@ export async function fetchPublicPlaceReviewsFromUrl(raw: string): Promise<{
 
   if (!placeId) throw new Error("Google could not identify a place from that URL.");
 
+  const resourceId = placesResourceId(placeId);
   const place = await placesNew<PlacesNewPlace>(
-    `places/${encodeURIComponent(placeId)}`,
+    `places/${encodeURIComponent(resourceId)}`,
     { method: "GET" },
     "id,displayName,formattedAddress,googleMapsUri,reviews",
   );
