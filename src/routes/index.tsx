@@ -182,13 +182,13 @@ function Landing() {
             Start protecting your rating today
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-            Create a workspace, import your reviews and run the first AI scan in minutes.
+            Paste a Google Review or Business URL, authorize with Google and run the first AI scan in minutes.
           </p>
           <Link
             to="/auth"
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet to-neon px-6 py-3 text-sm font-semibold text-primary-foreground"
           >
-            Create your workspace <ArrowRight className="h-4 w-4" />
+            Start review scan <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
       </main>

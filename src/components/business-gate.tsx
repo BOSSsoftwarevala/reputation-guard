@@ -9,7 +9,7 @@ import { Loader2, ShieldCheck } from "lucide-react";
 import { parseGoogleMapsUrl } from "@/lib/google-url";
 import type { ReactNode } from "react";
 
-/** Renders children only once the operator has at least one business workspace. */
+/** Starts first-time users from a Google URL without exposing workspace setup. */
 export function BusinessGate({ children }: { children: ReactNode }) {
   const { loading, activeBusiness, refresh } = useWorkspace();
   const create = useServerFn(createBusinessFromUrl);
@@ -22,10 +22,8 @@ export function BusinessGate({ children }: { children: ReactNode }) {
   if (loading) return <LoadingBlock label="Loading workspace" />;
   if (activeBusiness) return <>{children}</>;
 
-  // One-step onboarding: paste the Google Business URL, we create the workspace
-  // automatically, then send the operator straight to Google's own "Allow" consent
-  // screen. Everything after that (linking, importing reviews, AI scanning) runs
-  // on its own — no manual forms in between.
+  // One-step onboarding: paste the Google URL, create the internal workspace
+  // silently, then send the user straight to Google's own consent screen.
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -49,11 +47,10 @@ export function BusinessGate({ children }: { children: ReactNode }) {
     <div className="mx-auto max-w-xl">
       <Panel className="p-7">
         <Icon3D name="locations" size={64} className="float-slow" priority />
-        <h1 className="mt-4 font-display text-2xl font-bold">Add your Google Business</h1>
+        <h1 className="mt-4 font-display text-2xl font-bold">Start Google review scan</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Paste your Google Maps / Google Business Profile link. We'll set everything up and ask you to
-          allow access — the AI takes it from there: importing reviews, scanning for policy violations,
-          and preparing removals automatically.
+          Paste a Google Review or Business URL. We'll open Google's normal authorization screen, then
+          import real reviews and run the AI policy scan automatically.
         </p>
         <form onSubmit={submit} className="mt-6 space-y-3">
           <input
@@ -72,12 +69,11 @@ export function BusinessGate({ children }: { children: ReactNode }) {
             {step === "redirecting"
               ? "Opening Google sign-in…"
               : step === "creating"
-                ? "Setting up your workspace…"
-                : "Add business & continue with Google"}
+                ? "Preparing scan…"
+                : "Continue with Google authorization"}
           </button>
           <p className="text-center text-xs text-muted-foreground">
-            You'll be asked to allow OrbitRep to read your Google Business Profile reviews. Nothing is
-            changed on Google until you approve a removal.
+            You keep your Google password private and only approve access on Google's own screen.
           </p>
         </form>
       </Panel>

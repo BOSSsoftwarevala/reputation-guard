@@ -111,7 +111,7 @@ function AuthPage() {
         </Link>
 
         <h1 className="font-display text-2xl font-bold">
-          {mode === "signin" ? "Welcome back" : "Create your workspace"}
+          {mode === "signin" ? "Welcome back" : "Create your account"}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === "signin"
