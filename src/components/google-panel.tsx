@@ -57,10 +57,15 @@ export function GooglePanel({
 
   const connected = status?.connected ?? false;
 
-  const { data: googleLocations, isFetching: loadingGoogle } = useQuery({
+  const {
+    data: googleLocations,
+    isFetching: loadingGoogle,
+    error: googleLocationsError,
+  } = useQuery({
     queryKey: ["google-locations", businessId],
     queryFn: () => fetchGoogleLocations({ data: { businessId } }),
     enabled: Boolean(businessId) && connected && showLinker,
+    retry: false,
   });
 
   const connectMutation = useMutation({
@@ -165,6 +170,11 @@ export function GooglePanel({
         <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
           {loadingGoogle ? (
             <p className="text-sm text-muted-foreground">Loading Google locations…</p>
+          ) : googleLocationsError ? (
+            <p className="text-sm text-danger">
+              {(googleLocationsError as Error).message ||
+                "Google Business Profile API request failed."}
+            </p>
           ) : (googleLocations ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No Google locations were returned for this account. Confirm the account manages Business

@@ -122,7 +122,24 @@ async function googleGet<T>(url: string, accessToken: string): Promise<T> {
   const response = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` } });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Google API ${response.status}: ${text.slice(0, 300)}`);
+    let reason: string | undefined;
+    let message = text.slice(0, 300);
+    try {
+      const parsed = JSON.parse(text) as {
+        error?: { message?: string; status?: string; details?: { reason?: string }[] };
+      };
+      message = parsed.error?.message ?? message;
+      reason = parsed.error?.details?.find((d) => d.reason)?.reason ?? parsed.error?.status;
+    } catch {
+      // Non-JSON error body — keep the raw text above.
+    }
+    const error = new Error(`Google API ${response.status}: ${message}`) as Error & {
+      status?: number;
+      reason?: string;
+    };
+    error.status = response.status;
+    if (reason) error.reason = reason;
+    throw error;
   }
   return (await response.json()) as T;
 }

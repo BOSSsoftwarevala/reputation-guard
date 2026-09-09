@@ -42,6 +42,37 @@ export async function connectionStatus(businessId: string) {
   };
 }
 
+/** Turns a raw Google API error into an actionable message for the operator/UI. */
+function describeGoogleApiError(err: unknown): string {
+  const error = err as { message?: string; status?: number; reason?: string } | undefined;
+  if (error?.reason === "SERVICE_DISABLED") {
+    return (
+      "Google rejected the request because a required Business Profile API is disabled " +
+      "in the Google Cloud project for this OAuth client. Enable the My Business Account " +
+      "Management API and My Business Business Information API for this project, then retry."
+    );
+  }
+  if (error?.status === 403) {
+    return (
+      "Google denied access to Business Profile data for this account (403). The signed-in " +
+      "Google account may not manage any Business Profile locations, or API access has not " +
+      "been approved for this OAuth client."
+    );
+  }
+  if (error?.status === 401) {
+    return "Google rejected the access token (401). Reconnect the Google account.";
+  }
+  if (error?.status === 429 && error?.reason === "RATE_LIMIT_EXCEEDED") {
+    return (
+      "Google has not granted this Google Cloud project a request quota for the Business " +
+      "Profile APIs yet (quota limit is 0). Enabling the API in Cloud Console is not enough — " +
+      "you must submit Google's official 'Application For Basic API Access' for the Business " +
+      "Profile APIs and wait for approval before any requests will succeed."
+    );
+  }
+  return error?.message ?? "Google Business Profile API request failed.";
+}
+
 export async function saveConnection(input: {
   businessId: string;
   userId: string;
@@ -50,7 +81,16 @@ export async function saveConnection(input: {
 }) {
   const tokens = await exchangeCode(input.code, input.redirectUri);
   const email = await fetchGoogleEmail(tokens.access_token);
-  const accounts = await listAccounts(tokens.access_token).catch(() => []);
+  let accounts: Awaited<ReturnType<typeof listAccounts>> = [];
+  let accountsError: string | null = null;
+  try {
+    accounts = await listAccounts(tokens.access_token);
+  } catch (err) {
+    // Don't fail the whole OAuth connect over this — the token is still valid
+    // and worth storing — but surface the REAL reason instead of silently
+    // pretending the account has zero locations.
+    accountsError = describeGoogleApiError(err);
+  }
   const db = await admin();
   const { error } = await db.from("google_connections").upsert(
     {
@@ -62,7 +102,7 @@ export async function saveConnection(input: {
       refresh_token: tokens.refresh_token ?? null,
       token_expires_at: new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString(),
       scope: tokens.scope ?? null,
-      last_sync_error: null,
+      last_sync_error: accountsError,
     },
     { onConflict: "business_id" },
   );
@@ -100,32 +140,43 @@ async function accessTokenFor(businessId: string) {
 /** Google locations the connected account manages, so operators can link them to workspace locations. */
 export async function availableGoogleLocations(businessId: string) {
   const { token, account } = await accessTokenFor(businessId);
-  const accounts = account ? [{ name: account }] : await listAccounts(token);
-  const out: { name: string; title: string; address: string; account: string }[] = [];
-  for (const acc of accounts) {
-    const locations = await listLocations(token, acc.name);
-    for (const location of locations) {
-      out.push({
-        name: location.name,
-        title: location.title ?? location.name,
-        address: [
-          ...(location.storefrontAddress?.addressLines ?? []),
-          location.storefrontAddress?.locality,
-        ]
-          .filter(Boolean)
-          .join(", "),
-        account: acc.name,
-      });
+  try {
+    const accounts = account ? [{ name: account }] : await listAccounts(token);
+    const out: { name: string; title: string; address: string; account: string }[] = [];
+    for (const acc of accounts) {
+      const locations = await listLocations(token, acc.name);
+      for (const location of locations) {
+        out.push({
+          name: location.name,
+          title: location.title ?? location.name,
+          address: [
+            ...(location.storefrontAddress?.addressLines ?? []),
+            location.storefrontAddress?.locality,
+          ]
+            .filter(Boolean)
+            .join(", "),
+          account: acc.name,
+        });
+      }
     }
-  }
-  if (accounts[0] && !account) {
     const db = await admin();
-    await db
-      .from("google_connections")
-      .update({ google_account_name: accounts[0].name })
-      .eq("business_id", businessId);
+    if (accounts[0] && !account) {
+      await db.from("google_connections").update({ google_account_name: accounts[0].name }).eq(
+        "business_id",
+        businessId,
+      );
+    }
+    // Clear any previously recorded error now that a call has succeeded.
+    await db.from("google_connections").update({ last_sync_error: null }).eq("business_id", businessId);
+    return out;
+  } catch (err) {
+    const message = describeGoogleApiError(err);
+    // eslint-disable-next-line no-console -- server-side diagnostic, no token/secret included
+    console.error(`[google] availableGoogleLocations failed for business ${businessId}:`, err);
+    const db = await admin();
+    await db.from("google_connections").update({ last_sync_error: message }).eq("business_id", businessId);
+    throw new Error(message);
   }
-  return out;
 }
 
 /**
