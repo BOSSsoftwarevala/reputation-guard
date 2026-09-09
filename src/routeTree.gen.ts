@@ -21,6 +21,9 @@ import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedReviewsRouteImport } from './routes/_authenticated/reviews'
 import { Route as AuthenticatedScannerRouteImport } from './routes/_authenticated/scanner'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as ApiCronGoogleReconcileRouteImport } from './routes/api/cron/google-reconcile'
+import { Route as ApiCronGoogleSyncRouteImport } from './routes/api/cron/google-sync'
+import { Route as ApiCronScanWorkerRouteImport } from './routes/api/cron/scan-worker'
 import { Route as ApiPublicGoogleCallbackRouteImport } from './routes/api/public/google/callback'
 
 const IndexRoute = IndexRouteImport.update({
@@ -83,6 +86,21 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiCronGoogleReconcileRoute = ApiCronGoogleReconcileRouteImport.update({
+  id: '/api/cron/google-reconcile',
+  path: '/api/cron/google-reconcile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronGoogleSyncRoute = ApiCronGoogleSyncRouteImport.update({
+  id: '/api/cron/google-sync',
+  path: '/api/cron/google-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronScanWorkerRoute = ApiCronScanWorkerRouteImport.update({
+  id: '/api/cron/scan-worker',
+  path: '/api/cron/scan-worker',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicGoogleCallbackRoute = ApiPublicGoogleCallbackRouteImport.update({
   id: '/api/public/google/callback',
   path: '/api/public/google/callback',
@@ -101,6 +119,9 @@ export interface FileRoutesByFullPath {
   '/reviews': typeof AuthenticatedReviewsRoute
   '/scanner': typeof AuthenticatedScannerRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/cron/google-reconcile': typeof ApiCronGoogleReconcileRoute
+  '/api/cron/google-sync': typeof ApiCronGoogleSyncRoute
+  '/api/cron/scan-worker': typeof ApiCronScanWorkerRoute
   '/api/public/google/callback': typeof ApiPublicGoogleCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -115,6 +136,9 @@ export interface FileRoutesByTo {
   '/reviews': typeof AuthenticatedReviewsRoute
   '/scanner': typeof AuthenticatedScannerRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/cron/google-reconcile': typeof ApiCronGoogleReconcileRoute
+  '/api/cron/google-sync': typeof ApiCronGoogleSyncRoute
+  '/api/cron/scan-worker': typeof ApiCronScanWorkerRoute
   '/api/public/google/callback': typeof ApiPublicGoogleCallbackRoute
 }
 export interface FileRoutesById {
@@ -131,6 +155,9 @@ export interface FileRoutesById {
   '/_authenticated/reviews': typeof AuthenticatedReviewsRoute
   '/_authenticated/scanner': typeof AuthenticatedScannerRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/api/cron/google-reconcile': typeof ApiCronGoogleReconcileRoute
+  '/api/cron/google-sync': typeof ApiCronGoogleSyncRoute
+  '/api/cron/scan-worker': typeof ApiCronScanWorkerRoute
   '/api/public/google/callback': typeof ApiPublicGoogleCallbackRoute
 }
 export interface FileRouteTypes {
@@ -147,6 +174,9 @@ export interface FileRouteTypes {
     | '/reviews'
     | '/scanner'
     | '/settings'
+    | '/api/cron/google-reconcile'
+    | '/api/cron/google-sync'
+    | '/api/cron/scan-worker'
     | '/api/public/google/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -161,6 +191,9 @@ export interface FileRouteTypes {
     | '/reviews'
     | '/scanner'
     | '/settings'
+    | '/api/cron/google-reconcile'
+    | '/api/cron/google-sync'
+    | '/api/cron/scan-worker'
     | '/api/public/google/callback'
   id:
     | '__root__'
@@ -176,6 +209,9 @@ export interface FileRouteTypes {
     | '/_authenticated/reviews'
     | '/_authenticated/scanner'
     | '/_authenticated/settings'
+    | '/api/cron/google-reconcile'
+    | '/api/cron/google-sync'
+    | '/api/cron/scan-worker'
     | '/api/public/google/callback'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +219,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiCronGoogleReconcileRoute: typeof ApiCronGoogleReconcileRoute
+  ApiCronGoogleSyncRoute: typeof ApiCronGoogleSyncRoute
+  ApiCronScanWorkerRoute: typeof ApiCronScanWorkerRoute
   ApiPublicGoogleCallbackRoute: typeof ApiPublicGoogleCallbackRoute
 }
 
@@ -272,6 +311,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/cron/google-reconcile': {
+      id: '/api/cron/google-reconcile'
+      path: '/api/cron/google-reconcile'
+      fullPath: '/api/cron/google-reconcile'
+      preLoaderRoute: typeof ApiCronGoogleReconcileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/google-sync': {
+      id: '/api/cron/google-sync'
+      path: '/api/cron/google-sync'
+      fullPath: '/api/cron/google-sync'
+      preLoaderRoute: typeof ApiCronGoogleSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/scan-worker': {
+      id: '/api/cron/scan-worker'
+      path: '/api/cron/scan-worker'
+      fullPath: '/api/cron/scan-worker'
+      preLoaderRoute: typeof ApiCronScanWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/google/callback': {
       id: '/api/public/google/callback'
       path: '/api/public/google/callback'
@@ -313,6 +373,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiCronGoogleReconcileRoute: ApiCronGoogleReconcileRoute,
+  ApiCronGoogleSyncRoute: ApiCronGoogleSyncRoute,
+  ApiCronScanWorkerRoute: ApiCronScanWorkerRoute,
   ApiPublicGoogleCallbackRoute: ApiPublicGoogleCallbackRoute,
 }
 export const routeTree = rootRouteImport
