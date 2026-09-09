@@ -1,9 +1,8 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import {
-  createLovableAiGatewayProvider,
   describeGatewayError,
-  requireLovableApiKey,
+  requireAiProvider,
   SCAN_MODEL,
   RESPONSE_MODEL,
 } from "./ai-gateway.server";
@@ -103,7 +102,7 @@ export async function analyzeReviews(
   businessName: string,
 ): Promise<{ results: AnalysisResult[] } | { error: string; retryable: boolean }> {
   if (reviews.length === 0) return { results: [] };
-  const provider = createLovableAiGatewayProvider(requireLovableApiKey());
+  const provider = requireAiProvider();
 
   const prompt = [
     `Business under review: ${businessName}`,
@@ -158,7 +157,7 @@ export async function draftReviewResponse(input: {
   reviewText: string;
   tone: string;
 }): Promise<{ response: string; rationale: string } | { error: string; retryable: boolean }> {
-  const provider = createLovableAiGatewayProvider(requireLovableApiKey());
+  const provider = requireAiProvider();
   try {
     const { text } = await generateText({
       model: provider(RESPONSE_MODEL),

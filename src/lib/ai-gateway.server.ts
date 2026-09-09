@@ -60,10 +60,49 @@ export function createLovableAiGatewayProvider(lovableApiKey: string, initialRun
   });
 }
 
+/**
+ * Creates a provider against a custom OpenAI-compatible gateway (e.g. a
+ * self-hosted Claude proxy) using AI_GATEWAY_BASE_URL / AI_GATEWAY_API_KEY.
+ * Falls back to the real Lovable AI gateway when those aren't set.
+ */
+function createCustomGatewayProvider(baseURL: string, apiKey: string) {
+  return createOpenAICompatible({
+    name: "custom-gateway",
+    baseURL,
+    supportsStructuredOutputs: false,
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+    },
+  });
+}
+
 /** Model used for high-volume policy scanning. */
-export const SCAN_MODEL = "google/gemini-3.7-flash";
+export const SCAN_MODEL = process.env["AI_GATEWAY_BASE_URL"]
+  ? (process.env["AI_SCAN_MODEL"] ?? "claude-3-5-sonnet-20241022")
+  : "google/gemini-3.7-flash";
 /** Model used for drafting public review responses. */
-export const RESPONSE_MODEL = "google/gemini-3.7-flash";
+export const RESPONSE_MODEL = process.env["AI_GATEWAY_BASE_URL"]
+  ? (process.env["AI_RESPONSE_MODEL"] ?? "claude-3-5-sonnet-20241022")
+  : "google/gemini-3.7-flash";
+
+/**
+ * Resolves the configured AI provider: a custom gateway (AI_GATEWAY_BASE_URL +
+ * AI_GATEWAY_API_KEY) takes priority; otherwise falls back to the real
+ * Lovable AI gateway via LOVABLE_API_KEY.
+ */
+export function requireAiProvider() {
+  const gatewayBaseUrl = process.env["AI_GATEWAY_BASE_URL"];
+  const gatewayApiKey = process.env["AI_GATEWAY_API_KEY"] ?? process.env["LOVABLE_API_KEY"];
+  if (gatewayBaseUrl) {
+    if (!gatewayApiKey) {
+      throw new Error("AI_GATEWAY_BASE_URL is set but AI_GATEWAY_API_KEY is missing.");
+    }
+    return createCustomGatewayProvider(gatewayBaseUrl, gatewayApiKey);
+  }
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+  if (!lovableKey) throw new Error("AI is not configured for this workspace (missing gateway key).");
+  return createLovableAiGatewayProvider(lovableKey);
+}
 
 export function requireLovableApiKey() {
   const key = process.env["LOVABLE_API_KEY"];
