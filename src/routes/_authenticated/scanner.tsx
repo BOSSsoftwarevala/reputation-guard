@@ -6,6 +6,7 @@ import { Loader2, Play, Square } from "lucide-react";
 import {
   cancelScanJob,
   getActiveScanJob,
+  importReviewsFromGoogleUrl,
   processScanBatch,
   startScanJob,
 } from "@/lib/reviews.functions";
@@ -41,9 +42,11 @@ function ScannerPage() {
   const queryClient = useQueryClient();
   const getJob = useServerFn(getActiveScanJob);
   const start = useServerFn(startScanJob);
+  const importFromUrl = useServerFn(importReviewsFromGoogleUrl);
   const process = useServerFn(processScanBatch);
   const cancel = useServerFn(cancelScanJob);
   const [log, setLog] = useState<string[]>([]);
+  const [googleUrl, setGoogleUrl] = useState("");
   const running = useRef(false);
 
   const { data: job, refetch } = useQuery({
@@ -83,6 +86,22 @@ function ScannerPage() {
     onSuccess: (created) => {
       setLog(["Scan job started."]);
       void pump(created.id);
+    },
+  });
+
+  const urlMutation = useMutation({
+    mutationFn: () => importFromUrl({ data: { businessId, url: googleUrl.trim() } }),
+    onSuccess: (result) => {
+      setLog([
+        `Fetched ${result.fetched} real Google review${result.fetched === 1 ? "" : "s"} for ${result.placeName}.`,
+        "AI scan job started.",
+      ]);
+      void queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      void queryClient.invalidateQueries({ queryKey: ["stats"] });
+      void pump(result.job.id);
+    },
+    onError: (caught: Error) => {
+      setLog((entries) => [`Google URL import failed: ${caught.message}`, ...entries]);
     },
   });
 
@@ -133,6 +152,40 @@ function ScannerPage() {
           </>
         }
       />
+
+      <Panel className="mb-4 p-5">
+        <h2 className="font-display text-lg font-semibold">Test from a Google Business/Profile URL</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Paste a Google Maps or Business Profile URL. While Google Business Profile API quota approval is
+          pending, this uses the official Google Places API to fetch real public review snippets, then runs
+          the existing AI policy scan and report flow.
+        </p>
+        <form
+          className="mt-4 flex flex-col gap-3 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!googleUrl.trim()) return;
+            urlMutation.mutate();
+          }}
+        >
+          <input
+            value={googleUrl}
+            onChange={(event) => setGoogleUrl(event.target.value)}
+            placeholder="https://www.google.com/maps/place/..."
+            className="min-w-0 flex-1 rounded-xl border border-input bg-surface px-3.5 py-2.5 text-sm outline-none focus:neon-outline"
+          />
+          <button
+            disabled={urlMutation.isPending || isRunning || !googleUrl.trim()}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet to-neon px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {urlMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            Fetch real reviews & scan
+          </button>
+        </form>
+        {urlMutation.error ? (
+          <p className="mt-3 text-sm text-danger">{(urlMutation.error as Error).message}</p>
+        ) : null}
+      </Panel>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel className="p-6 lg:col-span-2">

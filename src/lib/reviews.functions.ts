@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { analyzeReviews, draftReviewResponse } from "./review-analysis.server";
+import { fetchPublicPlaceReviewsFromUrl } from "./google.server";
 
 /** Paginated, filtered, sorted review feed for one business. */
 export const listReviews = createServerFn({ method: "POST" })
@@ -135,6 +136,118 @@ export const importReviews = createServerFn({ method: "POST" })
     });
 
     return { imported: importedCount, received: data.reviews.length };
+  });
+
+export const importReviewsFromGoogleUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        businessId: z.string().uuid(),
+        url: z.string().min(1).max(800),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const place = await fetchPublicPlaceReviewsFromUrl(data.url);
+    if (place.reviews.length === 0) {
+      throw new Error("Google identified the business, but the Places API returned no public review snippets.");
+    }
+
+    const { data: locations, error: locationReadError } = await supabase
+      .from("locations")
+      .select("id,name,google_place_id")
+      .eq("business_id", data.businessId)
+      .order("created_at", { ascending: true });
+    if (locationReadError) throw new Error(locationReadError.message);
+
+    let locationId = locations?.[0]?.id ?? null;
+    if (!locationId) {
+      const { data: created, error } = await supabase
+        .from("locations")
+        .insert({
+          business_id: data.businessId,
+          name: place.placeName,
+          address: place.address,
+          google_place_id: place.placeId,
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      locationId = created.id;
+    } else {
+      const first = locations?.[0];
+      await supabase
+        .from("locations")
+        .update({
+          name: first?.name || place.placeName,
+          address: place.address,
+          google_place_id: place.placeId,
+          google_last_sync_at: new Date().toISOString(),
+        })
+        .eq("id", locationId);
+    }
+
+    const now = new Date().toISOString();
+    const payload = place.reviews.map((review) => ({
+      business_id: data.businessId,
+      location_id: locationId,
+      google_review_name: review.google_review_name,
+      source_review_id: review.source_review_id,
+      reviewer_name: review.reviewer_name,
+      reviewer_profile_url: review.reviewer_profile_url,
+      rating: review.rating,
+      review_text: review.review_text,
+      review_date: review.review_date,
+      google_last_seen_at: now,
+      is_live_on_google: true,
+      removed_from_google_at: null,
+      scan_status: "unscanned" as const,
+      violation_category: null,
+      ai_confidence: null,
+      ai_explanation: null,
+      ai_evidence: [],
+      recommended_action: null,
+      scanned_at: null,
+      priority: "normal" as const,
+      is_legitimate_negative: false,
+    }));
+
+    const { data: upserted, error: reviewError } = await supabase
+      .from("reviews")
+      .upsert(payload, { onConflict: "business_id,source_review_id" })
+      .select("id");
+    if (reviewError) throw new Error(reviewError.message);
+
+    const { data: job, error: jobError } = await supabase
+      .from("scan_jobs")
+      .insert({
+        business_id: data.businessId,
+        created_by: userId,
+        total_reviews: upserted?.length ?? payload.length,
+        status: "running",
+        lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+      })
+      .select()
+      .single();
+    if (jobError) throw new Error(jobError.message);
+
+    await supabase.from("notifications").insert({
+      user_id: userId,
+      business_id: data.businessId,
+      type: "import_complete",
+      title: `${payload.length} real Google review${payload.length === 1 ? "" : "s"} imported`,
+      body: `Fetched from Google Places for ${place.placeName}. AI scan started.`,
+      link: "/scanner",
+    });
+
+    return {
+      placeName: place.placeName,
+      placeId: place.placeId,
+      fetched: payload.length,
+      job,
+    };
   });
 
 /** Creates (or reuses) a bounded scan job with a single-flight lease. */

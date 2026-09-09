@@ -2,7 +2,8 @@
  * Google Business Profile integration (server only).
  * OAuth token handling, live location + review reads, and removal-outcome detection.
  */
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { parseGoogleMapsUrl } from "./google-url";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -10,6 +11,7 @@ const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const ACCOUNTS_API = "https://mybusinessaccountmanagement.googleapis.com/v1";
 const INFO_API = "https://mybusinessbusinessinformation.googleapis.com/v1";
 const REVIEWS_API = "https://mybusiness.googleapis.com/v4";
+const PLACES_API = "https://maps.googleapis.com/maps/api/place";
 
 export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/business.manage";
 
@@ -243,4 +245,130 @@ export async function fetchAllReviews(
     if (!pageToken) break;
   }
   return out;
+}
+
+type PlacesFindResponse = {
+  status: string;
+  error_message?: string;
+  candidates?: { place_id?: string; name?: string; formatted_address?: string }[];
+};
+
+type PlacesReview = {
+  author_name?: string;
+  author_url?: string;
+  rating?: number;
+  text?: string;
+  time?: number;
+};
+
+type PlacesDetailsResponse = {
+  status: string;
+  error_message?: string;
+  result?: {
+    place_id?: string;
+    name?: string;
+    formatted_address?: string;
+    url?: string;
+    rating?: number;
+    user_ratings_total?: number;
+    reviews?: PlacesReview[];
+  };
+};
+
+function mapsApiKey() {
+  const key = process.env["GOOGLE_API_KEY"] ?? process.env["GOOGLE_MAPS_API_KEY"];
+  if (!key) throw new Error("Google Maps API key is not configured on the server.");
+  return key;
+}
+
+async function placesGet<T extends { status: string; error_message?: string }>(path: string, params: Record<string, string>) {
+  const url = new URL(`${PLACES_API}/${path}/json`);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  url.searchParams.set("key", mapsApiKey());
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Google Places API ${response.status}: ${response.statusText}`);
+  const body = (await response.json()) as T;
+  if (body.status !== "OK") {
+    throw new Error(`Google Places API ${body.status}: ${body.error_message ?? "No matching place/reviews returned."}`);
+  }
+  return body;
+}
+
+async function resolveGoogleMapsUrl(raw: string) {
+  try {
+    const response = await fetch(raw, { method: "GET", redirect: "follow" });
+    return response.url || raw;
+  } catch {
+    return raw;
+  }
+}
+
+function reviewSourceId(placeId: string, review: PlacesReview) {
+  const key = [
+    placeId,
+    review.author_name ?? "Anonymous",
+    review.time ?? "",
+    review.rating ?? "",
+    review.text ?? "",
+  ].join("|");
+  return `places-${createHash("sha256").update(key).digest("hex").slice(0, 24)}`;
+}
+
+/**
+ * Temporary legitimate fallback for demos while GBP Basic API Access quota is 0:
+ * reads public Google Places review snippets for a pasted Maps/GBP URL using the
+ * server-side Google Maps key. It never fabricates reviews and never bypasses
+ * Google authentication/quota controls.
+ */
+export async function fetchPublicPlaceReviewsFromUrl(raw: string): Promise<{
+  placeId: string;
+  placeName: string;
+  placeUrl: string | null;
+  address: string | null;
+  reviews: NormalizedReview[];
+}> {
+  const resolvedUrl = await resolveGoogleMapsUrl(raw);
+  const parsed = parseGoogleMapsUrl(resolvedUrl);
+  let placeId = parsed.placeId;
+
+  if (!placeId) {
+    const query = parsed.name ?? raw;
+    const found = await placesGet<PlacesFindResponse>("findplacefromtext", {
+      input: query,
+      inputtype: "textquery",
+      fields: "place_id,name,formatted_address",
+    });
+    placeId = found.candidates?.[0]?.place_id ?? null;
+  }
+
+  if (!placeId) throw new Error("Google could not identify a place from that URL.");
+
+  const details = await placesGet<PlacesDetailsResponse>("details", {
+    place_id: placeId,
+    fields: "place_id,name,formatted_address,url,rating,user_ratings_total,reviews",
+    reviews_sort: "newest",
+  });
+  const place = details.result;
+  if (!place?.place_id) throw new Error("Google Places did not return a usable place record.");
+
+  const reviews = (place.reviews ?? []).map((review) => {
+    const source = reviewSourceId(place.place_id!, review);
+    return {
+      google_review_name: `places/${place.place_id}/reviews/${source}`,
+      source_review_id: source,
+      reviewer_name: review.author_name?.trim() || "Anonymous",
+      reviewer_profile_url: review.author_url ?? null,
+      rating: Math.min(5, Math.max(1, Math.round(review.rating ?? 5))),
+      review_text: review.text ?? "",
+      review_date: new Date((review.time ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+    };
+  });
+
+  return {
+    placeId: place.place_id,
+    placeName: place.name ?? parsed.name ?? "Google Business",
+    placeUrl: place.url ?? null,
+    address: place.formatted_address ?? null,
+    reviews,
+  };
 }
