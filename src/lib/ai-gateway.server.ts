@@ -1,4 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createAnthropic } from "@ai-sdk/anthropic";
 
 const LOVABLE_AIG_RUN_ID_HEADER = "X-Lovable-AIG-Run-ID";
 
@@ -77,20 +78,29 @@ function createCustomGatewayProvider(baseURL: string, apiKey: string) {
 }
 
 /** Model used for high-volume policy scanning. */
-export const SCAN_MODEL = process.env["AI_GATEWAY_BASE_URL"]
-  ? (process.env["AI_SCAN_MODEL"] ?? "claude-3-5-sonnet-20241022")
-  : "google/gemini-3.7-flash";
+export const SCAN_MODEL =
+  process.env["CLAUDE_API_KEY"] || process.env["ANTHROPIC_API_KEY"] || process.env["AI_GATEWAY_BASE_URL"]
+    ? (process.env["AI_SCAN_MODEL"] ?? "claude-3-5-sonnet-20241022")
+    : "google/gemini-3.7-flash";
 /** Model used for drafting public review responses. */
-export const RESPONSE_MODEL = process.env["AI_GATEWAY_BASE_URL"]
-  ? (process.env["AI_RESPONSE_MODEL"] ?? "claude-3-5-sonnet-20241022")
-  : "google/gemini-3.7-flash";
+export const RESPONSE_MODEL =
+  process.env["CLAUDE_API_KEY"] || process.env["ANTHROPIC_API_KEY"] || process.env["AI_GATEWAY_BASE_URL"]
+    ? (process.env["AI_RESPONSE_MODEL"] ?? "claude-3-5-sonnet-20241022")
+    : "google/gemini-3.7-flash";
 
 /**
- * Resolves the configured AI provider: a custom gateway (AI_GATEWAY_BASE_URL +
- * AI_GATEWAY_API_KEY) takes priority; otherwise falls back to the real
- * Lovable AI gateway via LOVABLE_API_KEY.
+ * Resolves the configured AI provider. Priority order:
+ * 1. Real Anthropic API (CLAUDE_API_KEY, or the ANTHROPIC_API_KEY fallback) —
+ *    talks to api.anthropic.com directly, no third-party gateway involved.
+ * 2. A custom OpenAI-compatible gateway (AI_GATEWAY_BASE_URL + AI_GATEWAY_API_KEY).
+ * 3. The real Lovable AI gateway via LOVABLE_API_KEY.
  */
 export function requireAiProvider() {
+  const anthropicKey = process.env["CLAUDE_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"];
+  if (anthropicKey) {
+    return createAnthropic({ apiKey: anthropicKey });
+  }
+
   const gatewayBaseUrl = process.env["AI_GATEWAY_BASE_URL"];
   const gatewayApiKey = process.env["AI_GATEWAY_API_KEY"] ?? process.env["LOVABLE_API_KEY"];
   if (gatewayBaseUrl) {
