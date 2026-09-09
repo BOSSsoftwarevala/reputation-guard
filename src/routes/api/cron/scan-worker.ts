@@ -30,14 +30,20 @@ export const Route = createFileRoute("/api/cron/scan-worker")({
         const candidateBusinessIds = [...new Set((businessesWithWork ?? []).map((r) => r.business_id))];
 
         for (const businessId of candidateBusinessIds) {
-          const { data: activeJob } = await db
+          // Any job still marked "running" (lease expired or not) is reused below
+          // in the batch-processing loop, which refreshes its lease. Only start a
+          // brand-new job when there is truly none in flight, otherwise every cron
+          // tick would spawn a duplicate job for the same business. Uses a plain
+          // select + length check (not .maybeSingle()) because .maybeSingle()
+          // throws when more than one row matches, which silently looked like "no
+          // active job" here and caused duplicate jobs to keep being created.
+          const { data: activeJobs } = await db
             .from("scan_jobs")
             .select("id")
             .eq("business_id", businessId)
             .eq("status", "running")
-            .gt("lease_expires_at", now)
-            .maybeSingle();
-          if (activeJob) continue;
+            .limit(1);
+          if (activeJobs && activeJobs.length > 0) continue;
 
           const { count } = await db
             .from("reviews")

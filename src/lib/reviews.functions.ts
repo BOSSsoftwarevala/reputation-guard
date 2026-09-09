@@ -146,13 +146,18 @@ export const startScanJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const { data: existing } = await supabase
+    // Uses a plain select + first-row pick (not .maybeSingle()) because
+    // .maybeSingle() throws if more than one row matches, which would surface as a
+    // 500 here instead of just reusing/creating a job, if duplicates ever exist.
+    const { data: existingRows } = await supabase
       .from("scan_jobs")
       .select("*")
       .eq("business_id", data.businessId)
       .eq("status", "running")
       .gt("lease_expires_at", new Date().toISOString())
-      .maybeSingle();
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const existing = existingRows?.[0];
     if (existing) return existing;
 
     let countQuery = supabase
