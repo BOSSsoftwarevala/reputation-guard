@@ -123,6 +123,21 @@ export function requireLovableApiKey() {
 /** Maps an AI gateway failure onto a user-facing message + retryability. */
 export function describeGatewayError(error: unknown): { message: string; retryable: boolean } {
   const raw = error instanceof Error ? error.message : String(error);
+
+  // The gateway can return HTTP 200 with a body that isn't the expected
+  // OpenAI-compatible schema (e.g. a disabled-key notice from an upstream
+  // Anthropic-shaped proxy). ai-sdk surfaces this as a JSON/schema parse
+  // failure with no HTTP status code. Treating these as retryable caused an
+  // infinite scan-retry loop that never stopped and never surfaced the real
+  // problem, so they must be treated as non-retryable (pause + report).
+  if (/disabled|invalid json response|no object generated|response did not match|failed to parse/i.test(raw)) {
+    return {
+      message:
+        "The AI gateway returned an unusable response (its API key may be disabled or its response format changed). Scanning has been paused — check the AI gateway credential.",
+      retryable: false,
+    };
+  }
+
   const status = /\b(400|401|402|403|429|5\d\d)\b/.exec(raw)?.[1];
   switch (status) {
     case "402":
@@ -135,7 +150,14 @@ export function describeGatewayError(error: unknown): { message: string; retryab
       return { message: "AI rate limit reached. The scan will resume shortly.", retryable: true };
     case "400":
       return { message: "The AI request was rejected as invalid.", retryable: false };
+    case "500":
+    case "502":
+    case "503":
+    case "504":
+      return { message: "AI gateway is temporarily unavailable. The scan will resume shortly.", retryable: true };
     default:
-      return { message: raw.slice(0, 300) || "Unexpected AI gateway error.", retryable: true };
+      // Unknown/unclassified failures must NOT be retried forever: default to
+      // pausing the job and surfacing the real error message.
+      return { message: raw.slice(0, 300) || "Unexpected AI gateway error.", retryable: false };
   }
 }
