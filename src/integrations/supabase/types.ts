@@ -455,6 +455,78 @@ export type Database = {
           },
         ]
       }
+      review_responses: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          business_id: string
+          created_at: string
+          created_by: string
+          draft_text: string
+          google_error: string | null
+          id: string
+          posted_to_google: boolean
+          review_id: string
+          sent_at: string | null
+          sent_by: string | null
+          sent_channel: string | null
+          status: Database["public"]["Enums"]["response_status"]
+          tone: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          business_id: string
+          created_at?: string
+          created_by: string
+          draft_text: string
+          google_error?: string | null
+          id?: string
+          posted_to_google?: boolean
+          review_id: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_channel?: string | null
+          status?: Database["public"]["Enums"]["response_status"]
+          tone?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          business_id?: string
+          created_at?: string
+          created_by?: string
+          draft_text?: string
+          google_error?: string | null
+          id?: string
+          posted_to_google?: boolean
+          review_id?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_channel?: string | null
+          status?: Database["public"]["Enums"]["response_status"]
+          tone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_responses_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_responses_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           ai_confidence: number | null
@@ -662,6 +734,7 @@ export type Database = {
         | "removed_by_google"
         | "still_live"
         | "no_result"
+      response_status: "draft" | "approved" | "sent"
       review_priority: "high" | "medium" | "review_required" | "normal"
       scan_status: "unscanned" | "queued" | "scanning" | "scanned" | "failed"
       violation_category:
@@ -821,6 +894,7 @@ export const Constants = {
         "still_live",
         "no_result",
       ],
+      response_status: ["draft", "approved", "sent"],
       review_priority: ["high", "medium", "review_required", "normal"],
       scan_status: ["unscanned", "queued", "scanning", "scanned", "failed"],
       violation_category: [
