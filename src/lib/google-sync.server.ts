@@ -417,3 +417,22 @@ export async function reconcileOutcomes(businessId: string, userId: string) {
 
   return { resolved, stillLive };
 }
+
+/** Publishes an approved reply to Google for one review (requires a live connection). */
+export async function publishReviewReply(businessId: string, reviewId: string, comment: string) {
+  const db = await admin();
+  const { data: review, error } = await db
+    .from("reviews")
+    .select("id,google_review_name")
+    .eq("id", reviewId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!review?.google_review_name) {
+    throw new Error("This review was not imported from a connected Google location, so it cannot be answered on Google automatically.");
+  }
+  const { token } = await accessTokenFor(businessId);
+  const { postReviewReply } = await import("./google.server");
+  await postReviewReply(token, review.google_review_name, comment);
+  return true;
+}

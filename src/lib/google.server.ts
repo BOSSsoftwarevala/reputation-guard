@@ -383,3 +383,30 @@ export async function fetchPublicPlaceReviewsFromUrl(raw: string): Promise<{
     reviews,
   };
 }
+
+/**
+ * Publishes the owner's reply to a Google review.
+ * `reviewName` is the full resource name stored on reviews.google_review_name
+ * (accounts/{a}/locations/{l}/reviews/{r}).
+ */
+export async function postReviewReply(accessToken: string, reviewName: string, comment: string) {
+  const response = await fetch(`${REVIEWS_API}/${reviewName}/reply`, {
+    method: "PUT",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ comment }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    let message = response.statusText;
+    try {
+      message = (JSON.parse(text) as { error?: { message?: string } }).error?.message ?? message;
+    } catch {
+      if (text) message = text.slice(0, 300);
+    }
+    throw new Error(`Google API ${response.status}: ${message}`);
+  }
+  return true;
+}
