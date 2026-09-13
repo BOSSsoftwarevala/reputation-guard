@@ -128,56 +128,11 @@ export function ReviewDrawer({
 
         <section className="mt-6 pb-6">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            AI response draft
+            AI response assistant
           </h3>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <select
-              value={tone}
-              onChange={(event) => setTone(event.target.value as typeof tone)}
-              className="rounded-xl border border-input bg-surface px-3 py-2 text-sm"
-            >
-              {["professional", "empathetic", "concise", "warm", "formal"].map((option) => (
-                <option key={option} value={option} className="bg-popover">
-                  {option}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => draftMutation.mutate()}
-              disabled={draftMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm font-medium disabled:opacity-60"
-            >
-              {draftMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 text-neon" />
-              )}
-              Generate reply
-            </button>
+          <div className="mt-3">
+            <ResponsePanel reviewId={review.id} />
           </div>
-          {draftMutation.error ? (
-            <p className="mt-2 text-sm text-danger">{(draftMutation.error as Error).message}</p>
-          ) : null}
-          {draft ? (
-            <>
-              <textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                rows={7}
-                className="mt-3 w-full rounded-xl border border-input bg-surface p-3 text-sm"
-              />
-              <button
-                onClick={() => {
-                  void navigator.clipboard.writeText(draft);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1600);
-                }}
-                className="mt-2 rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
-              >
-                {copied ? "Copied" : "Copy reply"}
-              </button>
-            </>
-          ) : null}
         </section>
       </aside>
     </div>
