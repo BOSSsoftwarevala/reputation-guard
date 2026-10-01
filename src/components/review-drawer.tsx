@@ -1,10 +1,9 @@
-import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Sparkles, X } from "lucide-react";
-import { generateResponseDraft } from "@/lib/reviews.functions";
+import { Loader2, X } from "lucide-react";
 import { createCase } from "@/lib/cases.functions";
 import { CategoryBadge, ConfidenceMeter, PriorityBadge, RatingStars } from "@/components/badges";
+import { ResponsePanel } from "@/components/response-panel";
 import type { ReviewRow, ReviewPriority, ViolationCategory } from "@/lib/domain";
 
 export type ReviewWithRelations = ReviewRow & {
@@ -20,18 +19,7 @@ export function ReviewDrawer({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const draftFn = useServerFn(generateResponseDraft);
   const caseFn = useServerFn(createCase);
-  const [tone, setTone] = useState<"professional" | "empathetic" | "concise" | "warm" | "formal">(
-    "professional",
-  );
-  const [draft, setDraft] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const draftMutation = useMutation({
-    mutationFn: () => draftFn({ data: { reviewId: review.id, tone } }),
-    onSuccess: (result) => setDraft(result.response),
-  });
 
   const caseMutation = useMutation({
     mutationFn: () => caseFn({ data: { reviewId: review.id } }),
