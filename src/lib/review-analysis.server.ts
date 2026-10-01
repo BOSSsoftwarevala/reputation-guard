@@ -124,7 +124,7 @@ export async function analyzeReviews(
 
   try {
     const { text } = await generateText({
-      model: provider(SCAN_MODEL),
+      model: provider(SCAN_MODEL) as Parameters<typeof generateText>[0]["model"],
       system: `${SYSTEM_PROMPT}
 
 Respond with raw JSON only (no markdown fences) shaped exactly as:
