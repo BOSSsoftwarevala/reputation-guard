@@ -19,7 +19,7 @@ export default defineConfig(async ({ command }) => {
   // self-hosted on a VPS behind nginx.
   if (command === "build") {
     const { nitro } = await import("nitro/vite");
-    plugins.push(nitro({ preset: "node-server" }));
+    plugins.push(nitro({ preset: "node-server", output: { dir: "dist" } }));
   }
 
   return { plugins };
