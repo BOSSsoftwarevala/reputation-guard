@@ -160,7 +160,7 @@ export async function draftReviewResponse(input: {
   const provider = requireAiProvider();
   try {
     const { text } = await generateText({
-      model: provider(RESPONSE_MODEL),
+      model: provider(RESPONSE_MODEL) as Parameters<typeof generateText>[0]["model"],
       system: `You write public owner responses to Google reviews for "${input.businessName}".
 Rules: never dispute facts you cannot verify, never invent details about the customer's visit,
 never promise compensation, never ask the reviewer to delete the review. Stay under 90 words,
